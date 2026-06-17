@@ -36,7 +36,7 @@
           
           // Position bobber in the center of your fishing hole model
           // Adjust these coordinates to match the water level of your GLB
-          this.bobber.setAttribute('position', '1.0 0.05 -1.5'); 
+          this.bobber.setAttribute('position', '1.0 -1.05 -1.5'); 
           this.bobber.setAttribute('visible', 'true');
 
           // Random bite timer between 4 to 8 seconds
