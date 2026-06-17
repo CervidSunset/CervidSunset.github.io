@@ -107,10 +107,10 @@
       <a-entity id="rightHand" laser-controls="hand: right" fishing-game></a-entity>
 
       <!-- Your custom 3D model positioned safely to the side of your desk -->
-      <a-entity id="fishing-hole" gltf-model="#fishing-hole-glb" position="1.0 0 -1.5" scale="1 1 1"></a-entity>
+      <a-entity id="fishing-hole" gltf-model="#fishing-hole-glb" position="1.0 -1 -1.5" scale="-0.25 -0.25 -0.25"></a-entity>
 
       <!-- The Bobber: A simple red sphere that appears on cast -->
-      <a-sphere id="bobber" radius="0.04" color="#FF0000" position="1.0 0 -1.5" visible="false"></a-sphere>
+      <a-sphere id="bobber" radius="0.04" color="#FF0000" position="1.0 -1 -1.5" visible="false"></a-sphere>
 
       <!-- Floating text display floating right over the hole to track states -->
       <a-text id="ui-text" value="Click trigger to cast into the hole." 
