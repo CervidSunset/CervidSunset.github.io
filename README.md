@@ -6,12 +6,10 @@
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     
     <script>
-      // The Master Game Manager
       AFRAME.registerComponent('game-manager', {
         init: function () {
-          this.state = 'startup'; // States: startup, placing, idle, casted, bite, caught
+          this.state = 'placing'; 
           
-          // Link our 3D objects to the code
           this.bobber = document.querySelector('#bobber');
           this.fishText = document.querySelector('#ui-text');
           this.hole = document.querySelector('#fishing-hole');
@@ -20,36 +18,17 @@
           
           this.targetPos = {x: 0, y: 0, z: 0}; 
 
-          // Listen for trigger presses on the right controller
+          // We still use the controller trigger to confirm the placement and fish
           const rightHand = document.querySelector('#rightHand');
           rightHand.addEventListener('triggerdown', this.handleTrigger.bind(this));
         },
 
-        // The tick function runs every single frame (like Unity's Update method)
-        tick: function() {
-          if (this.state === 'startup' || this.state === 'placing') {
-             this.state = 'placing'; // Move from startup to placing instantly
-             
-             // Grab the laser pointer from the right controller
-             const rightRay = document.querySelector('#rightHand').components.raycaster;
-             
-             // If the laser is touching our invisible floor, move the green circle there
-             if (rightRay && rightRay.intersections && rightRay.intersections.length > 0) {
-                 this.targetPos = rightRay.intersections[0].point;
-                 
-                 this.reticle.setAttribute('position', {
-                     x: this.targetPos.x,
-                     y: this.targetPos.y + 0.01, // Hover 1cm above floor to prevent glitchy visuals
-                     z: this.targetPos.z
-                 });
-                 this.reticle.setAttribute('visible', 'true');
-             }
-          }
-        },
-
         handleTrigger: function (evt) {
           if (this.state === 'placing') {
-            this.placePond();
+            // Only allow placement if the AR hit test has found a real physical surface
+            if (this.reticle.getAttribute('visible')) {
+              this.placePond();
+            }
           } else if (this.state === 'idle') {
             this.castLine();
           } else if (this.state === 'casted') {
@@ -64,11 +43,15 @@
         placePond: function() {
           this.state = 'idle';
           
-          // 1. Move the 3D Pond to the reticle's location and reveal it
+          // Grab the exact real-world coordinates from the AR depth sensor
+          let arPosition = this.reticle.getAttribute('position');
+          this.targetPos = {x: arPosition.x, y: arPosition.y, z: arPosition.z};
+          
+          // Move the 3D Pond to the physical surface
           this.hole.setAttribute('position', this.targetPos);
           this.hole.setAttribute('visible', 'true');
           
-          // 2. Move the fishing text to hover directly over the new pond location
+          // Hover the UI text 0.8 meters above the physical floor
           this.fishText.setAttribute('position', {
              x: this.targetPos.x,
              y: this.targetPos.y + 0.8,
@@ -77,17 +60,17 @@
           this.fishText.setAttribute('value', 'Pond placed! Click trigger to cast.');
           this.fishText.setAttribute('visible', 'true');
 
-          // 3. Hide the placement UI, Menu, and disable the floor laser
+          // Shut off the AR Hit Test engine so the reticle goes away
+          this.reticle.removeAttribute('ar-hit-test');
           this.reticle.setAttribute('visible', 'false');
           this.startMenu.setAttribute('visible', 'false');
-          document.querySelector('#floor').setAttribute('class', ''); 
         },
 
         castLine: function () {
           this.state = 'casted';
           this.fishText.setAttribute('value', 'Line casted... waiting for a bite.');
           
-          // Spawn the bobber exactly at the custom pond location
+          // Spawn the bobber flush with the custom water level
           this.bobber.setAttribute('position', {
              x: this.targetPos.x,
              y: this.targetPos.y + 0.05,
@@ -105,7 +88,6 @@
           this.state = 'bite';
           this.fishText.setAttribute('value', '!! BITE !! REEL IT IN NOW!');
           
-          // Dynamically calculate the dip animation based on floor height
           let dipY = this.targetPos.y - 0.1;
           this.bobber.setAttribute('animation', `property: position; to: ${this.targetPos.x} ${dipY} ${this.targetPos.z}; dur: 200; loops: 5; dir: alternate`);
           
@@ -161,20 +143,21 @@
 
       <a-entity id="start-menu" position="0 1.5 -1.5">
         <a-plane color="#000000" opacity="0.8" width="1.5" height="0.6" position="0 0 -0.01"></a-plane>
-        <a-text value="Welcome to Desk Fishing!\n\nPoint your right controller at the floor\nand pull the trigger to place your pond." 
+        <a-text value="Welcome to Desk Fishing!\n\nLook at the real floor to move the ring,\nthen pull the trigger to place your pond." 
                 align="center" color="#FFFFFF" width="1.5"></a-text>
       </a-entity>
 
       <a-entity id="leftHand" laser-controls="hand: left"></a-entity>
-      <a-entity id="rightHand" laser-controls="hand: right" raycaster="objects: .floor; far: 5"></a-entity>
+      <a-entity id="rightHand" laser-controls="hand: right"></a-entity>
 
-      <a-plane id="floor" class="floor" position="0 0 0" rotation="-90 0 0" width="20" height="20" material="opacity: 0; transparent: true"></a-plane>
-
-      <a-ring id="reticle" rotation="-90 0 0" radius-inner="0.3" radius-outer="0.4" color="#00FF00" visible="false"></a-ring>
+      <a-entity id="reticle" ar-hit-test>
+        <a-ring rotation="-90 0 0" radius-inner="0.15" radius-outer="0.2" color="#00FF00"></a-ring>
+      </a-entity>
 
       <a-entity id="fishing-hole" gltf-model="#fishing-hole-glb" position="0 0 0" scale="0.1 0.1 0.1" visible="false"></a-entity>
 
       <a-sphere id="bobber" radius="0.04" color="#FF0000" visible="false"></a-sphere>
+      
       <a-text id="ui-text" value="" scale="0.6 0.6 0.6" color="#FFFFFF" align="center" visible="false">
         <a-plane color="#000000" opacity="0.5" width="2" height="0.3" position="0 0 -0.01"></a-plane>
       </a-text>
