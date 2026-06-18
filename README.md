@@ -168,7 +168,7 @@
       <a-entity id="leftHand" laser-controls="hand: left"></a-entity>
       <a-entity id="rightHand" laser-controls="hand: right" raycaster="objects: .floor; far: 5"></a-entity>
 
-      <a-plane id="floor" class="floor" position="0 0 0" rotation="-90 0 0" width="20" height="20" visible="false"></a-plane>
+      <a-plane id="floor" class="floor" position="0 0 0" rotation="-90 0 0" width="20" height="20" material="opacity: 0; transparent: true"></a-plane>
 
       <a-ring id="reticle" rotation="-90 0 0" radius-inner="0.3" radius-outer="0.4" color="#00FF00" visible="false"></a-ring>
 
