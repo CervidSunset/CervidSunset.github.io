@@ -43,8 +43,8 @@
         placePond: function() {
           this.state = 'idle';
           
-          // Grab the exact real-world coordinates from the AR depth sensor
-          let arPosition = this.reticle.getAttribute('position');
+          // Ask the 3D engine directly for the physical coordinates
+          let arPosition = this.reticle.object3D.position;
           this.targetPos = {x: arPosition.x, y: arPosition.y, z: arPosition.z};
           
           // Move the 3D Pond to the physical surface
@@ -60,8 +60,8 @@
           this.fishText.setAttribute('value', 'Pond placed! Click trigger to cast.');
           this.fishText.setAttribute('visible', 'true');
 
-          // Shut off the AR Hit Test engine so the reticle goes away
-          this.reticle.removeAttribute('ar-hit-test');
+          // Shut off the AR Hit Test engine on the CONTROLLER
+          document.querySelector('#rightHand').removeAttribute('ar-hit-test');
           this.reticle.setAttribute('visible', 'false');
           this.startMenu.setAttribute('visible', 'false');
         },
