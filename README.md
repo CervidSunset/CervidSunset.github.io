@@ -150,7 +150,7 @@
       <a-entity id="leftHand" laser-controls="hand: left"></a-entity>
       <a-entity id="rightHand" laser-controls="hand: right" ar-hit-test="target: #reticle;"></a-entity>
 
-      <a-entity id="reticle" ar-hit-test>
+      <a-entity id="reticle" visible="false">
   <a-ring rotation="-90 0 0" radius-inner="0.15" radius-outer="0.2" color="#00FF00"></a-ring>
 </a-entity>
 
