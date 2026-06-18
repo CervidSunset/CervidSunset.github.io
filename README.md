@@ -172,7 +172,7 @@
 
       <a-ring id="reticle" rotation="-90 0 0" radius-inner="0.3" radius-outer="0.4" color="#00FF00" visible="false"></a-ring>
 
-      <a-entity id="fishing-hole" gltf-model="#fishing-hole-glb" position="0 0 0" scale="1 1 1" visible="false"></a-entity>
+      <a-entity id="fishing-hole" gltf-model="#fishing-hole-glb" position="0 0 0" scale="0.1 0.1 0.1" visible="false"></a-entity>
 
       <a-sphere id="bobber" radius="0.04" color="#FF0000" visible="false"></a-sphere>
       <a-text id="ui-text" value="" scale="0.6 0.6 0.6" color="#FFFFFF" align="center" visible="false">
