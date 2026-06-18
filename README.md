@@ -8,69 +8,104 @@
     <script>
       AFRAME.registerComponent('game-manager', {
         init: function () {
-          this.state = 'placing'; 
+          this.state = 'placing'; // States: placing, adjusting, idle, casted, bite, caught
           
           this.bobber = document.querySelector('#bobber');
           this.fishText = document.querySelector('#ui-text');
           this.hole = document.querySelector('#fishing-hole');
           this.reticle = document.querySelector('#reticle');
           this.startMenu = document.querySelector('#start-menu');
+          this.heightMenu = document.querySelector('#height-menu');
           
-          this.targetPos = {x: 0, y: 0, z: 0}; 
+          this.targetPos = {x: 0, y: 0, z: -1.5}; 
 
-          // We still use the controller trigger to confirm the placement and fish
-          const rightHand = document.querySelector('#rightHand');
-          rightHand.addEventListener('triggerdown', this.handleTrigger.bind(this));
-        },
-
-        handleTrigger: function (evt) {
-          if (this.state === 'placing') {
-            // Only allow placement if the AR hit test has found a real physical surface
-            if (this.reticle.getAttribute('visible')) {
-              this.placePond();
+          // 1. Hover listener: Move the green ring as the user moves their controller laser
+          document.querySelector('#floor-plane').addEventListener('mousemove', (evt) => {
+            if (this.state === 'placing') {
+              let hitPoint = evt.detail.intersection.point;
+              this.targetPos.x = hitPoint.x;
+              this.targetPos.z = hitPoint.z;
+              
+              this.reticle.setAttribute('position', `${this.targetPos.x} 0.01 ${this.targetPos.z}`);
+              this.reticle.setAttribute('visible', 'true');
             }
-          } else if (this.state === 'idle') {
-            this.castLine();
-          } else if (this.state === 'casted') {
-            this.reelEarly();
-          } else if (this.state === 'bite') {
-            this.catchFish();
-          } else if (this.state === 'caught') {
-            this.resetToIdle();
-          }
+          });
+
+          // 2. Click listener: Lock the base X/Z coordinates when they click the floor
+          document.querySelector('#floor-plane').addEventListener('click', () => {
+            if (this.state === 'placing') {
+              this.lockBasePosition();
+            }
+          });
+
+          // 3. Height Menu listeners: Wire up the virtual adjustment buttons
+          document.querySelector('#btn-raise').addEventListener('click', () => this.adjustHeight(0.02));
+          document.querySelector('#btn-lower').addEventListener('click', () => this.adjustHeight(-0.02));
+          document.querySelector('#btn-confirm').addEventListener('click', () => this.confirmPlacement());
+
+          // 4. Global Action trigger: Handles actual fishing gameplay mechanics
+          const rightHand = document.querySelector('#rightHand');
+          rightHand.addEventListener('triggerdown', (evt) => {
+            // Only capture raw trigger pulls if we are actively fishing
+            if (this.state !== 'placing' && this.state !== 'adjusting') {
+              this.handleFishingGameplay();
+            }
+          });
         },
 
-        placePond: function() {
-          this.state = 'idle';
+        lockBasePosition: function() {
+          this.state = 'adjusting';
           
-          // Ask the 3D engine directly for the physical coordinates
-          let arPosition = this.reticle.object3D.position;
-          this.targetPos = {x: arPosition.x, y: arPosition.y, z: arPosition.z};
-          
-          // Move the 3D Pond to the physical surface
+          // Spawn pond at baseline height (0) and make it visible
           this.hole.setAttribute('position', this.targetPos);
           this.hole.setAttribute('visible', 'true');
           
-          // Hover the UI text 0.8 meters above the physical floor
+          // Hide start instructions, show the height calibration panel
+          this.startMenu.setAttribute('visible', 'false');
+          this.heightMenu.setAttribute('visible', 'true');
+          
+          // Turn off the floor plane so it doesn't block our menu clicks
+          document.querySelector('#floor-plane').setAttribute('class', '');
+        },
+
+        adjustHeight: function(amount) {
+          if (this.state === 'adjusting') {
+            this.targetPos.y += amount;
+            
+            // Move both the pond and the alignment ring up/down in real-time
+            this.hole.setAttribute('position', this.targetPos);
+            this.reticle.setAttribute('position', this.targetPos);
+          }
+        },
+
+        confirmPlacement: function() {
+          this.state = 'idle';
+          
+          // Hide setup UIs entirely
+          this.heightMenu.setAttribute('visible', 'false');
+          this.reticle.setAttribute('visible', 'false');
+          
+          // Place fishing UI text floating comfortably above the customized pond height
           this.fishText.setAttribute('position', {
              x: this.targetPos.x,
              y: this.targetPos.y + 0.8,
              z: this.targetPos.z
           });
-          this.fishText.setAttribute('value', 'Pond placed! Click trigger to cast.');
+          this.fishText.setAttribute('value', 'Position Locked!\nPull right trigger to cast line.');
           this.fishText.setAttribute('visible', 'true');
+        },
 
-          // Shut off the AR Hit Test engine on the CONTROLLER
-          document.querySelector('#rightHand').removeAttribute('ar-hit-test');
-          this.reticle.setAttribute('visible', 'false');
-          this.startMenu.setAttribute('visible', 'false');
+        handleFishingGameplay: function () {
+          if (this.state === 'idle') this.castLine();
+          else if (this.state === 'casted') this.reelEarly();
+          else if (this.state === 'bite') this.catchFish();
+          else if (this.state === 'caught') this.resetToIdle();
         },
 
         castLine: function () {
           this.state = 'casted';
           this.fishText.setAttribute('value', 'Line casted... waiting for a bite.');
           
-          // Spawn the bobber flush with the custom water level
           this.bobber.setAttribute('position', {
              x: this.targetPos.x,
              y: this.targetPos.y + 0.05,
@@ -104,7 +139,7 @@
           const fishTypes = ['Bass', 'Trout', 'Salmon', 'Golden Carp', 'Old Boot'];
           const randomFish = fishTypes[Math.floor(Math.random() * fishTypes.length)];
           
-          this.fishText.setAttribute('value', `Caught: ${randomFish}! Click to cast again.`);
+          this.fishText.setAttribute('value', `Caught: ${randomFish}!\nPull trigger to recast.`);
           this.bobber.setAttribute('visible', 'false');
         },
 
@@ -118,13 +153,13 @@
         fishEscape: function () {
           this.bobber.removeAttribute('animation');
           this.state = 'idle';
-          this.fishText.setAttribute('value', 'The fish got away! Click to recast.');
+          this.fishText.setAttribute('value', 'The fish got away! Try again.');
           this.bobber.setAttribute('visible', 'false');
         },
 
         resetToIdle: function () {
           this.state = 'idle';
-          this.fishText.setAttribute('value', 'Click trigger to cast into the hole.');
+          this.fishText.setAttribute('value', 'Pull trigger to cast into the hole.');
         }
       });
     </script>
@@ -132,7 +167,7 @@
   <body>
 
     <a-scene 
-      webxr="optionalFeatures: hit-test, local-floor; referenceSpaceType: local-floor"
+      webxr="optionalFeatures: local-floor; referenceSpaceType: local-floor"
       xr-mode-ui="XRMode: xr"
       background="transparent: true"
       game-manager>
@@ -141,30 +176,32 @@
         <a-asset-item id="fishing-hole-glb" src="./models/fishing_hole.glb"></a-asset-item>
       </a-assets>
 
-      <a-entity id="start-menu" position="0 1.5 -1.5">
-        <a-plane color="#000000" opacity="0.8" width="1.5" height="0.6" position="0 0 -0.01"></a-plane>
-        <a-text value="Welcome to Desk Fishing!\n\nLook at the real floor to move the ring,\nthen pull the trigger to place your pond." 
-                align="center" color="#FFFFFF" width="1.5"></a-text>
+      <a-entity id="start-menu" position="0 1.4 -1.2">
+        <a-plane color="#111111" opacity="0.9" width="1.6" height="0.6" position="0 0 -0.01"></a-plane>
+        <a-text value="Welcome to Desk Fishing!\n\nAim your laser at the ground or desk\nand click to set the location." 
+                align="center" color="#FFFFFF" width="1.4"></a-text>
       </a-entity>
 
-      <a-entity id="leftHand" laser-controls="hand: left"></a-entity>
-      <a-entity id="rightHand" laser-controls="hand: right" ar-hit-test="target: #reticle;"></a-entity>
+      <a-entity id="height-menu" position="0 1.4 -1.2" visible="false">
+        <a-plane color="#111111" opacity="0.9" width="1.6" height="0.7" position="0 0 -0.01"></a-plane>
+        <a-text value="Calibrate Pond Height\nUse your laser pointer to click the buttons." align="center" color="#FFFFFF" width="1.4" position="0 0.22 0"></a-text>
+        
+        <a-box id="btn-raise" class="clickable" color="#4CAF50" position="-0.4 -0.1 0" width="0.3" height="0.15" depth="0.02">
+          <a-text value="HIGHER" align="center" position="0 0 0.015" scale="0.4 0.4 0.4" color="#FFF"></a-text>
+        </a-box>
+        <a-box id="btn-lower" class="clickable" color="#F44336" position="0 -0.1 0" width="0.3" height="0.15" depth="0.02">
+          <a-text value="LOWER" align="center" position="0 0 0.015" scale="0.4 0.4 0.4" color="#FFF"></a-text>
+        </a-box>
+        <a-box id="btn-confirm" class="clickable" color="#008CBA" position="0.4 -0.1 0" width="0.3" height="0.15" depth="0.02">
+          <a-text value="CONFIRM" align="center" position="0 0 0.015" scale="0.4 0.4 0.4" color="#FFF"></a-text>
+        </a-box>
+      </a-entity>
 
-      <a-entity id="reticle" visible="false">
-  <a-ring rotation="-90 0 0" radius-inner="0.15" radius-outer="0.2" color="#00FF00"></a-ring>
-</a-entity>
+      <a-entity id="leftHand" laser-controls="hand: left" raycaster="objects: .clickable, .interact-floor; far: 5"></a-entity>
+      <a-entity id="rightHand" laser-controls="hand: right" raycaster="objects: .clickable, .interact-floor; far: 5"></a-entity>
 
-      <a-entity id="fishing-hole" gltf-model="#fishing-hole-glb" position="0 0 0" scale="0.1 0.1 0.1" visible="false"></a-entity>
+      <a-plane id="floor-plane" class="interact-floor" position="0 0 0" rotation="-90 0 0" width="30" height="30" material="opacity: 0; transparent: true"></a-plane>
 
-      <a-sphere id="bobber" radius="0.04" color="#FF0000" visible="false"></a-sphere>
+      <a-ring id="reticle" rotation="-90 0 0" radius-inner="0.12" radius-outer="0.15" color="#00FF00" visible="false"></a-ring>
       
-      <a-text id="ui-text" value="" scale="0.6 0.6 0.6" color="#FFFFFF" align="center" visible="false">
-        <a-plane color="#000000" opacity="0.5" width="2" height="0.3" position="0 0 -0.01"></a-plane>
-      </a-text>
-
-      <a-entity light="type: ambient; intensity: 0.6;"></a-entity>
-      <a-entity light="type: directional; intensity: 0.5;" position="2 4 1"></a-entity>
-
-    </a-scene>
-  </body>
-</html>
+      <a-entity id="fishing-hole" gltf-model="#fishing-hole
