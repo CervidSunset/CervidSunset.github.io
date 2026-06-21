@@ -7,50 +7,114 @@
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
     
     <script>
-      // 1. PROCEDURAL TILE GENERATOR (WFC Framework)
-      AFRAME.registerComponent('wfc-generator', {
-        init: function () {
-          const gridSize = 12; // Generates a 24x24 grid
-          const tileSize = 4;  // 4x4 meter tiles
+      // 1. INFINITE PROCEDURAL GENERATOR (Proximity Rendering)
+AFRAME.registerComponent('infinite-poolrooms', {
+  schema: {
+    tileSize: { type: 'number', default: 4 },
+    renderRadius: { type: 'number', default: 5 } // Renders a 5x5 tile radius around player
+  },
 
-          // Tile Types (Map these to your .glb files later)
-          const TILE_TYPES = ['water', 'dry', 'pillar', 'wall'];
+  init: function () {
+    this.player = document.querySelector('#rig');
+    
+    // Memory mapping: Stores the "seed" data for the whole world
+    // Key: "x,z", Value: "tileType"
+    this.worldMemory = new Map(); 
+    
+    // Active DOM mapping: Stores the tiles currently rendered in the scene
+    this.activeTiles = new Map(); 
+    
+    this.lastGridPos = { x: 0, z: 0 };
+    this.tickCounter = 0;
+    
+    this.TILE_TYPES = ['water', 'dry', 'pillar', 'wall'];
+    
+    // Protect the spawn tile so it never gets overwritten by procedural logic
+    this.worldMemory.set('0,0', 'spawn'); 
 
-          for (let x = -gridSize; x <= gridSize; x++) {
-            for (let z = -gridSize; z <= gridSize; z++) {
-              // Skip the 0,0 coordinate to leave room for the Spawn Tile
-              if (x === 0 && z === 0) continue;
+    // Initial render
+    this.updateWorldChunks();
+  },
 
-              const posX = x * tileSize;
-              const posZ = z * tileSize;
-              
-              // Basic adjacency logic (Simplified WFC)
-              // In a full implementation, this checks neighboring tiles before selecting.
-              let selectedTile = TILE_TYPES[Math.floor(Math.random() * TILE_TYPES.length)];
-              
-              let tileEl = document.createElement('a-entity');
-              tileEl.setAttribute('position', `${posX} 0 ${posZ}`);
+  // Tick runs continuously. We throttle it to only check chunks every ~30 frames.
+  tick: function () {
+    this.tickCounter++;
+    if (this.tickCounter % 30 !== 0) return; 
 
-              // PLACEHOLDER GENERATION
-              // Replace these blocks with: tileEl.setAttribute('gltf-model', '#your-model-id');
-              if (selectedTile === 'water') {
-                tileEl.innerHTML = `<a-plane rotation="-90 0 0" width="4" height="4" color="#1CA3EC" material="opacity: 0.8"></a-plane>
-                                    <a-plane position="0 -0.5 0" rotation="-90 0 0" width="4" height="4" color="#F0F8FF"></a-plane>`;
-              } else if (selectedTile === 'dry') {
-                tileEl.innerHTML = `<a-plane rotation="-90 0 0" width="4" height="4" color="#F0F8FF" material="roughness: 0.2"></a-plane>`;
-              } else if (selectedTile === 'pillar') {
-                tileEl.innerHTML = `<a-plane rotation="-90 0 0" width="4" height="4" color="#1CA3EC" material="opacity: 0.8"></a-plane>
-                                    <a-box position="0 1.5 0" width="0.8" height="3" depth="0.8" color="#FFFFFF"></a-box>`;
-              } else if (selectedTile === 'wall') {
-                tileEl.innerHTML = `<a-plane rotation="-90 0 0" width="4" height="4" color="#F0F8FF"></a-plane>
-                                    <a-box position="0 2 -1.9" width="4" height="4" depth="0.2" color="#FFFFFF"></a-box>`;
-              }
+    // Calculate player's current grid coordinate
+    let pos = this.player.object3D.position;
+    let gridX = Math.round(pos.x / this.data.tileSize);
+    let gridZ = Math.round(pos.z / this.data.tileSize);
 
-              this.el.appendChild(tileEl);
-            }
-          }
+    // If player crossed into a new grid tile, update the world
+    if (gridX !== this.lastGridPos.x || gridZ !== this.lastGridPos.z) {
+      this.lastGridPos = { x: gridX, z: gridZ };
+      this.updateWorldChunks();
+    }
+  },
+
+  updateWorldChunks: function () {
+    let px = this.lastGridPos.x;
+    let pz = this.lastGridPos.z;
+    let radius = this.data.renderRadius;
+
+    // STEP 1: Generate & Render tiles around the player
+    for (let x = px - radius; x <= px + radius; x++) {
+      for (let z = pz - radius; z <= pz + radius; z++) {
+        let key = `${x},${z}`;
+
+        // If this coordinate has never been explored, decide what tile it is and save it to memory
+        if (!this.worldMemory.has(key)) {
+          let randomType = this.TILE_TYPES[Math.floor(Math.random() * this.TILE_TYPES.length)];
+          this.worldMemory.set(key, randomType);
         }
-      });
+
+        // If the tile is in memory but NOT currently rendered, render it
+        // (We skip 'spawn' because it's hardcoded into the HTML)
+        let tileType = this.worldMemory.get(key);
+        if (!this.activeTiles.has(key) && tileType !== 'spawn') {
+          this.spawnTileModel(x, z, tileType, key);
+        }
+      }
+    }
+
+    // STEP 2: Culling - Delete tiles that are too far away
+    for (let [key, domElement] of this.activeTiles.entries()) {
+      let coords = key.split(',');
+      let tx = parseInt(coords[0]);
+      let tz = parseInt(coords[1]);
+
+      // If the tile is further than the render radius, remove it from the scene
+      if (Math.abs(tx - px) > radius + 1 || Math.abs(tz - pz) > radius + 1) {
+        domElement.parentNode.removeChild(domElement); // Remove from A-Frame scene
+        this.activeTiles.delete(key);                  // Remove from active list
+      }
+    }
+  },
+
+  spawnTileModel: function (x, z, type, key) {
+    let tileEl = document.createElement('a-entity');
+    tileEl.setAttribute('position', `${x * this.data.tileSize} 0 ${z * this.data.tileSize}`);
+
+    // PLACEHOLDERS (Replace innerHTML with your .glb files later)
+    // e.g., tileEl.setAttribute('gltf-model', `#tile-${type}`);
+    if (type === 'water') {
+      tileEl.innerHTML = `<a-plane rotation="-90 0 0" width="4" height="4" color="#1CA3EC" material="opacity: 0.8"></a-plane>
+                          <a-plane position="0 -0.5 0" rotation="-90 0 0" width="4" height="4" color="#F0F8FF"></a-plane>`;
+    } else if (type === 'dry') {
+      tileEl.innerHTML = `<a-plane rotation="-90 0 0" width="4" height="4" color="#F0F8FF" material="roughness: 0.2"></a-plane>`;
+    } else if (type === 'pillar') {
+      tileEl.innerHTML = `<a-plane rotation="-90 0 0" width="4" height="4" color="#1CA3EC" material="opacity: 0.8"></a-plane>
+                          <a-box position="0 1.5 0" width="0.8" height="3" depth="0.8" color="#FFFFFF"></a-box>`;
+    } else if (type === 'wall') {
+      tileEl.innerHTML = `<a-plane rotation="-90 0 0" width="4" height="4" color="#F0F8FF"></a-plane>
+                          <a-box position="0 2 -1.9" width="4" height="4" depth="0.2" color="#FFFFFF"></a-box>`;
+    }
+
+    this.el.appendChild(tileEl);
+    this.activeTiles.set(key, tileEl);
+  }
+});
 
       // 2. CORE FISHING MECHANIC
       AFRAME.registerComponent('fishing-system', {
