@@ -1,238 +1,281 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>Liminal Poolrooms Fishing - Models Integration</title>
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
-    
-    <script>
-      // 1. INFINITE CHUNK MANAGER (Now with GLTF Support)
-      AFRAME.registerComponent('infinite-chunk-manager', {
-        schema: {
-          tileSize: {type: 'number', default: 4},
-          renderRadius: {type: 'int', default: 5},
-          cullRadius: {type: 'int', default: 7}
-        },
-
-        init: function () {
-          this.camera = document.querySelector('[camera]');
-          this.activeTiles = {}; 
-          this.tickThrottle = 0;
-          this.TILE_TYPES = ['water', 'dry', 'drypillar', 'waterpillar', 'drywall', 'waterwall'];
-        },
-
-        tick: function (time, timeDelta) {
-          this.tickThrottle += timeDelta;
-          if (this.tickThrottle > 500) {
-            this.updateGrid();
-            this.tickThrottle = 0;
-          }
-        },
-
-        updateGrid: function () {
-          const pos = this.camera.getAttribute('position');
-          const gridX = Math.round(pos.x / this.data.tileSize);
-          const gridZ = Math.round(pos.z / this.data.tileSize);
-
-          // SPAWN
-          for (let x = -this.data.renderRadius; x <= this.data.renderRadius; x++) {
-            for (let z = -this.data.renderRadius; z <= this.data.renderRadius; z++) {
-              const curX = gridX + x;
-              const curZ = gridZ + z;
-              const key = `${curX},${curZ}`;
-              
-              if (curX === 0 && curZ === 0) continue; 
-              
-              if (!this.activeTiles[key]) {
-                this.spawnTile(curX, curZ, key);
-              }
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebXR Poolrooms Fishing</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; }
+        #ui-container { position: absolute; top: 10px; width: 100%; text-align: center; color: white; font-family: sans-serif; pointer-events: none; z-index: 100; }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
             }
-          }
-
-          // CULL
-          for (let key in this.activeTiles) {
-            let coords = key.split(',');
-            let tileX = parseInt(coords[0]);
-            let tileZ = parseInt(coords[1]);
-            
-            if (Math.abs(tileX - gridX) > this.data.cullRadius || Math.abs(tileZ - gridZ) > this.data.cullRadius) {
-              if (tileX === 0 && tileZ === 0) continue; 
-              
-              this.el.removeChild(this.activeTiles[key]);
-              delete this.activeTiles[key];
-            }
-          }
-        },
-
-        spawnTile: function(gridX, gridZ, key) {
-          const posX = gridX * this.data.tileSize;
-          const posZ = gridZ * this.data.tileSize;
-          let selectedTile = this.TILE_TYPES[Math.floor(Math.random() * this.TILE_TYPES.length)];
-          
-          let tileEl = document.createElement('a-entity');
-          tileEl.setAttribute('position', `${posX} 0 ${posZ}`);
-
-          // Global primitive ceiling for the claustrophobic feel
-          let ceilingHTML = `<a-plane position="0 4 0" rotation="90 0 0" width="4" height="4" color="#FFFFF0" material="emissive: #fff; emissiveIntensity: 0.15"></a-plane>`;
-
-          // Inject the correct GLTF model based on the procedural selection
-          if (selectedTile === 'water') {
-            // Note: Keeping the water plane as requested, hovering slightly above the model's floor
-            tileEl.innerHTML = ceilingHTML + 
-              `<a-gltf-model src="#tile-water" position="0 0 0"></a-gltf-model>
-               <a-plane position="0 0.1 0" rotation="-90 0 0" width="4" height="4" color="#1CA3EC" material="opacity: 0.8; transparent: true"></a-plane>`;
-          } else if (selectedTile === 'dry') {
-            tileEl.innerHTML = ceilingHTML + 
-              `<a-gltf-model src="#tile-dry" position="0 0 0"></a-gltf-model>`;
-          } else if (selectedTile === 'waterpillar') {
-            // Assuming the pillar sits in water for the aesthetic, adding the water plane here too
-            tileEl.innerHTML = ceilingHTML + 
-              `<a-gltf-model src="#water-pillar" position="0 0 0"></a-gltf-model>
-               <a-plane position="0 0.1 0" rotation="-90 0 0" width="4" height="4" color="#1CA3EC" material="opacity: 0.8; transparent: true"></a-plane>`;
-          } else if (selectedTile === 'drypillar')
-            tileEl.innerHTML = ceilingHTML + 
-              `<a-gltf-model src="#dry-pillar" position="0 0 0"></a-gltf-model>`;
-          } else if (selectedTile === 'drywall') {
-            tileEl.innerHTML = ceilingHTML + 
-              `<a-gltf-model src="#tile-wall" position="0 0 0"></a-gltf-model>`;
-          } else if (selectedTile === 'waterwall') {
-            tileEl.innerHTML = ceilingHTML + 
-              `<a-gltf-model src="#water-wall" position="0 0 0"></a-gltf-model>`;
-          }
-
-          this.el.appendChild(tileEl);
-          this.activeTiles[key] = tileEl; 
         }
-      });
-
-      // 2. CORE FISHING MECHANIC (Unchanged)
-      AFRAME.registerComponent('fishing-system', {
-        init: function () {
-          this.state = 'idle'; 
-          this.rodEquipped = false;
-          this.fishVarieties = ["Ethereal Koi", "Tile-Glider", "Liminal Bass", "Chlorine Guppy", "Backrooms Snapper"];
-          this.uiText = document.querySelector('#fishing-ui');
-          this.el.addEventListener('triggerdown', this.onTrigger.bind(this));
-        },
-        
-        onTrigger: function (evt) {
-          if (!this.rodEquipped) {
-            const intersections = this.el.components.raycaster.intersectedEls;
-            if (intersections.length > 0 && intersections[0].id === 'fishing-rod-model') {
-              this.equipRod(intersections[0]);
-            }
-            return;
-          }
-
-          if (this.state === 'idle') {
-            this.castLine();
-          } else if (this.state === 'hooked') {
-            this.catchFish();
-          }
-        },
-
-        equipRod: function(rodEl) {
-          this.rodEquipped = true;
-          this.uiText.setAttribute('value', 'Rod equipped. Press Trigger near water to cast.');
-          rodEl.removeAttribute('position');
-          rodEl.removeAttribute('rotation');
-          this.el.appendChild(rodEl);
-          rodEl.setAttribute('position', '0 -0.1 -0.4');
-          rodEl.setAttribute('rotation', '45 0 0');
-        },
-
-        castLine: function() {
-          this.state = 'waiting';
-          this.uiText.setAttribute('value', 'Waiting for a bite...');
-          const biteTime = Math.floor(Math.random() * 5000) + 3000;
-          
-          setTimeout(() => {
-            if (this.state === 'waiting') {
-              this.state = 'hooked';
-              this.uiText.setAttribute('value', 'HOOKED! Press trigger to reel in.');
-              this.uiText.setAttribute('color', '#FF4500'); 
-            }
-          }, biteTime);
-        },
-
-        catchFish: function() {
-          const caughtFish = this.fishVarieties[Math.floor(Math.random() * this.fishVarieties.length)];
-          this.state = 'idle';
-          this.uiText.setAttribute('value', `Caught: ${caughtFish}!\nPress trigger to cast again.`);
-          this.uiText.setAttribute('color', '#00FF00');
-          this.spawnFishPlaceholder(caughtFish);
-        },
-
-        spawnFishPlaceholder: function(name) {
-          // You can replace this cylinder with <a-gltf-model> once you make the fish in Blender
-          let fish = document.createElement('a-cylinder');
-          fish.setAttribute('radius', '0.05');
-          fish.setAttribute('height', '0.2');
-          fish.setAttribute('color', '#FFD700');
-          fish.setAttribute('rotation', '0 0 90');
-          fish.setAttribute('position', '0 1 -1');
-          
-          setTimeout(() => {
-            if(fish.parentNode) fish.parentNode.removeChild(fish);
-            this.uiText.setAttribute('color', '#333');
-            this.uiText.setAttribute('value', 'Ready to cast.');
-          }, 4000);
-          
-          document.querySelector('a-scene').appendChild(fish);
-        }
-      });
     </script>
-  </head>
-  <body>
-    <a-assets>
-      <a-asset-item id="tile-dry" src="tile-dry.glb"></a-asset-item>
-      <a-asset-item id="tile-water" src="tile-water.glb"></a-asset-item>
-      <a-asset-item id="water-pillar" src="water-pillar.glb"></a-asset-item>
-      <a-asset-item id="dry-pillar" src="dry-pillar.glb"></a-asset-item>
-      <a-asset-item id="tile-wall" src="tile-wall.glb"></a-asset-item>
-      <a-asset-item id="water-wall" src="water-wall.glb"></a-asset-item>
-      
-      <a-asset-item id="desk" src="desk.glb"></a-asset-item>
-      <a-asset-item id="rod" src="fishing-rod.glb"></a-asset-item>
-    </a-assets>
+</head>
+<body>
+    <div id="ui-container">
+        <h1>Poolrooms Fishing</h1>
+        <p id="status-text">Loading 3D Models... Please wait.</p>
+    </div>
 
-    <a-scene background="color: #E0FFFF" fog="type: exponential; color: #E0FFFF; density: 0.04">
-      
-      <a-entity infinite-chunk-manager></a-entity>
+    <script type="module">
+        import * as THREE from 'three';
+        import { VRButton } from 'three/addons/webxr/VRButton.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-      <a-light type="ambient" color="#FFF" intensity="0.7"></a-light>
-      <a-entity light="type: directional; intensity: 0.3; position: -1 2 1" position="0 0 0" id="follow-light"></a-entity>
+        // --- Scene Setup ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb);
+        scene.fog = new THREE.Fog(0x87ceeb, 0, 15);
 
-      <a-entity id="rig" movement-controls="speed: 0.15" position="0 0 0">
-        <a-camera position="0 1.6 0">
-          <a-text id="fishing-ui" value="Grab the rod with your trigger." position="0 -0.3 -1" align="center" width="1.2" color="#333"></a-text>
-        </a-camera>
-        <a-entity laser-controls="hand: left" raycaster="objects: .interactable; far: 4"></a-entity>
-        <a-entity laser-controls="hand: right" raycaster="objects: .interactable; far: 4" fishing-system></a-entity>
-      </a-entity>
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 50);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.xr.enabled = true;
+        document.body.appendChild(renderer.domElement);
+        document.body.appendChild(VRButton.createButton(renderer));
 
-      <a-entity id="spawn-tile" position="0 0 0">
-        <a-plane position="0 4 0" rotation="90 0 0" width="4" height="4" color="#FFFFF0" material="emissive: #fff; emissiveIntensity: 0.15"></a-plane>
+        const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+        scene.add(light);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        dirLight.position.set(5, 10, 5);
+        scene.add(dirLight);
+
+        // --- Player Rig ---
+        const playerRig = new THREE.Group();
+        scene.add(playerRig);
+        playerRig.add(camera);
+
+        const controllers = [];
+        for (let i = 0; i < 2; i++) {
+            const controller = renderer.xr.getController(i);
+            controller.addEventListener('selectstart', onSelectStart);
+            playerRig.add(controller);
+            controllers.push(controller);
+
+            const gripGeo = new THREE.BoxGeometry(0.05, 0.05, 0.1);
+            const gripMat = new THREE.MeshStandardMaterial({ color: 0xcccccc });
+            controller.add(new THREE.Mesh(gripGeo, gripMat));
+        }
+
+        // --- Model Caching & Asset Arrays ---
+        const loader = new GLTFLoader();
         
-        <a-plane rotation="-90 0 0" width="4" height="4" color="#F0F8FF"></a-plane>
+        // This is the key change: tells the loader to look in the 'models' folder for all subsequent files
+        loader.setPath('./models/'); 
         
-        <a-gltf-model src="#desk" position="0 0.4 -1"></a-gltf-model>
+        const models = {}; 
 
-        <a-plane position="1.2 -0.1 0" rotation="-90 0 0" width="1.5" height="2" color="#1CA3EC" material="opacity: 0.8; transparent: true"></a-plane>
-        <a-box position="1.2 -0.6 0" width="1.5" height="1" depth="2" color="#E0FFFF" material="side: back"></a-box>
+        const tileNames = ['water', 'dry', 'waterpillar', 'drypillar', 'waterwall', 'drywall'];
+        const fishVarieties = [
+            { name: "Liminal Koi", file: "liminal_koi" },
+            { name: "Tilefish", file: "tilefish" },
+            { name: "Backrooms Bass", file: "backrooms_bass" },
+            { name: "Glitch Guppy", file: "glitch_guppy" },
+            { name: "Chlorine Trout", file: "chlorine_trout" }
+        ];
 
-        <a-gltf-model id="fishing-rod-model" src="#rod" class="interactable" position="0.6 0.8 -0.5"></a-gltf-model>
-      </a-entity>
+        let rodModel = null;
+        let poolModel = null;
+        let activeFish = null; 
 
-      <script>
-        document.querySelector('#rig').addEventListener('componentchanged', function (evt) {
-          if (evt.detail.name === 'position') {
-            document.querySelector('#follow-light').setAttribute('position', evt.detail.newData);
-          }
+        function updateStatus(text) {
+            document.getElementById('status-text').innerText = text;
+        }
+
+        // --- Asynchronous Loading ---
+        async function loadAssetsAndInit() {
+            try {
+                // 1. Load Static Environment
+                const deskGltf = await loader.loadAsync('desk.glb');
+                models.desk = deskGltf.scene;
+                models.desk.position.set(0, 0, -1); 
+                scene.add(models.desk);
+
+                const poolGltf = await loader.loadAsync('pool.glb');
+                poolModel = poolGltf.scene;
+                poolModel.position.set(1.5, 0, 0); 
+                scene.add(poolModel);
+
+                // 2. Load Fishing Rod
+                const rodGltf = await loader.loadAsync('fishing_rod.glb');
+                rodModel = rodGltf.scene;
+                rodModel.position.set(0, 0.85, -1); 
+                scene.add(rodModel);
+
+                // 3. Load WFC Tiles
+                for (const tile of tileNames) {
+                    const gltf = await loader.loadAsync(`${tile}.glb`);
+                    models[tile] = gltf.scene;
+                }
+
+                // 4. Load Fish Models
+                for (const fish of fishVarieties) {
+                    const gltf = await loader.loadAsync(`${fish.file}.glb`);
+                    models[fish.name] = gltf.scene;
+                }
+
+                // Build Map and start logic
+                generateWFCMap();
+                updateStatus("Explore using joysticks. Pick up the rod to fish.");
+                console.log("All models loaded successfully from the /models/ directory.");
+                
+            } catch (error) {
+                console.error("CRITICAL ERROR: Failed to load a 3D model.", error);
+                updateStatus("Error loading models. Check the browser console (F12) to see which file failed.");
+            }
+        }
+
+        // --- WFC Map Generation (GLTF Instancing) ---
+        function generateWFCMap() {
+            const gridSize = 10;
+            const tileSize = 2; 
+
+            for (let x = -gridSize; x <= gridSize; x++) {
+                for (let z = -gridSize; z <= gridSize; z++) {
+                    if (Math.abs(x) < 2 && Math.abs(z) < 2) continue;
+
+                    const randomTileKey = tileNames[Math.floor(Math.random() * tileNames.length)];
+                    const tileToPlace = models[randomTileKey].clone();
+                    
+                    tileToPlace.position.set(x * tileSize, 0, z * tileSize);
+                    scene.add(tileToPlace);
+                }
+            }
+        }
+
+        // --- Fishing System ---
+        let rodHeld = false;
+        let fishingState = 'idle'; 
+        let fishTimer = null;
+
+        function onSelectStart(event) {
+            const controller = event.target;
+            
+            if (!rodHeld && rodModel) {
+                const rodWorldPos = new THREE.Vector3();
+                rodModel.getWorldPosition(rodWorldPos);
+                
+                if (controller.position.distanceTo(rodWorldPos) < 0.4) {
+                    controller.add(rodModel);
+                    rodModel.position.set(0, 0, -0.1); 
+                    rodModel.rotation.set(-Math.PI / 4, 0, 0); 
+                    rodHeld = true;
+                    updateStatus("Rod equipped! Cast it over the water to the right.");
+                }
+            } else if (rodHeld && fishingState === 'hooked') {
+                const caughtFishData = fishVarieties[Math.floor(Math.random() * fishVarieties.length)];
+                updateStatus(`You caught a ${caughtFishData.name}!`);
+                
+                if (activeFish) {
+                    rodModel.remove(activeFish);
+                }
+
+                activeFish = models[caughtFishData.name].clone();
+                activeFish.position.set(0, 1.5, 0); 
+                rodModel.add(activeFish);
+
+                fishingState = 'idle';
+                console.log("Water normalized.");
+            }
+        }
+
+        function handleFishingLogic() {
+            if (!rodHeld || !rodModel || !poolModel) return;
+
+            const rodTipLocal = new THREE.Vector3(0, 1.5, 0); 
+            const rodTipWorld = rodModel.localToWorld(rodTipLocal.clone());
+
+            const poolPos = new THREE.Vector3();
+            poolModel.getWorldPosition(poolPos);
+            
+            const dx = rodTipWorld.x - poolPos.x;
+            const dz = rodTipWorld.z - poolPos.z;
+            const distanceToPoolCenter = Math.sqrt(dx * dx + dz * dz);
+            
+            const overPool = distanceToPoolCenter < 1.0;
+
+            if (overPool && rodTipWorld.y < 0.8 && fishingState === 'idle') {
+                fishingState = 'fishing';
+                updateStatus("Waiting for a bite...");
+                
+                if (activeFish) {
+                    rodModel.remove(activeFish);
+                    activeFish = null;
+                }
+                
+                const waitTime = Math.random() * 5000 + 3000;
+                clearTimeout(fishTimer);
+                fishTimer = setTimeout(() => {
+                    if (fishingState === 'fishing') {
+                        fishingState = 'hooked';
+                        updateStatus("FISH ON! Press the trigger to reel it in!");
+                    }
+                }, waitTime);
+            } else if (!overPool && fishingState === 'fishing') {
+                fishingState = 'idle';
+                clearTimeout(fishTimer);
+                updateStatus("You pulled the rod out of the water.");
+            }
+        }
+
+        // --- Locomotion Logic ---
+        function handleLocomotion() {
+            const session = renderer.xr.getSession();
+            if (!session) return;
+
+            for (const source of session.inputSources) {
+                if (source.gamepad) {
+                    if (source.handedness === 'left' && source.gamepad.axes.length >= 4) {
+                        const axisX = source.gamepad.axes[2]; 
+                        const axisZ = source.gamepad.axes[3]; 
+                        
+                        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                        forward.y = 0; 
+                        forward.normalize();
+                        
+                        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+                        right.y = 0;
+                        right.normalize();
+
+                        if (Math.abs(axisZ) > 0.1) playerRig.position.add(forward.multiplyScalar(-axisZ * 0.05));
+                        if (Math.abs(axisX) > 0.1) playerRig.position.add(right.multiplyScalar(axisX * 0.05));
+                    }
+                    
+                    if (source.handedness === 'right' && source.gamepad.axes.length >= 4) {
+                        const axisX = source.gamepad.axes[2];
+                        if (!source.gamepad.turnFired && Math.abs(axisX) > 0.5) {
+                            playerRig.rotation.y -= Math.sign(axisX) * (Math.PI / 4); 
+                            source.gamepad.turnFired = true; 
+                        } else if (Math.abs(axisX) < 0.1) {
+                            source.gamepad.turnFired = false;
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- Boot Application ---
+        loadAssetsAndInit();
+
+        // --- Main Render Loop ---
+        renderer.setAnimationLoop(() => {
+            handleLocomotion();
+            handleFishingLogic();
+            renderer.render(scene, camera);
         });
-      </script>
 
-    </a-scene>
-  </body>
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
 </html>
