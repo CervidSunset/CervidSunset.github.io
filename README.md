@@ -11,7 +11,7 @@
       AFRAME.registerComponent('infinite-poolrooms', {
         schema: {
           tileSize: {default: 4},
-          renderDist: {default: 4} // Renders 4 tiles out in every direction
+          renderDist: {default: 10} // Renders 4 tiles out in every direction
         },
         init: function () {
           this.worldData = new Map(); // Stores the layout infinitely in memory
