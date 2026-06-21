@@ -19,7 +19,7 @@
           this.camera = document.querySelector('[camera]');
           this.activeTiles = {}; 
           this.tickThrottle = 0;
-          this.TILE_TYPES = ['water', 'dry', 'pillar', 'wall'];
+          this.TILE_TYPES = ['water', 'dry', 'drypillar', 'waterpillar', 'drywall', 'waterwall'];
         },
 
         tick: function (time, timeDelta) {
@@ -85,14 +85,20 @@
           } else if (selectedTile === 'dry') {
             tileEl.innerHTML = ceilingHTML + 
               `<a-gltf-model src="#tile-dry" position="0 0 0"></a-gltf-model>`;
-          } else if (selectedTile === 'pillar') {
+          } else if (selectedTile === 'waterpillar') {
             // Assuming the pillar sits in water for the aesthetic, adding the water plane here too
             tileEl.innerHTML = ceilingHTML + 
-              `<a-gltf-model src="#tile-pillar" position="0 0 0"></a-gltf-model>
+              `<a-gltf-model src="#water-pillar" position="0 0 0"></a-gltf-model>
                <a-plane position="0 0.1 0" rotation="-90 0 0" width="4" height="4" color="#1CA3EC" material="opacity: 0.8; transparent: true"></a-plane>`;
-          } else if (selectedTile === 'wall') {
+          } else if (selectedTile === 'drypillar')
+            tileEl.innerHTML = ceilingHTML + 
+              `<a-gltf-model src="#dry-pillar" position="0 0 0"></a-gltf-model>`;
+          } else if (selectedTile === 'drywall') {
             tileEl.innerHTML = ceilingHTML + 
               `<a-gltf-model src="#tile-wall" position="0 0 0"></a-gltf-model>`;
+          } else if (selectedTile === 'waterwall') {
+            tileEl.innerHTML = ceilingHTML + 
+              `<a-gltf-model src="#water-wall" position="0 0 0"></a-gltf-model>`;
           }
 
           this.el.appendChild(tileEl);
@@ -182,8 +188,10 @@
     <a-assets>
       <a-asset-item id="tile-dry" src="tile-dry.glb"></a-asset-item>
       <a-asset-item id="tile-water" src="tile-water.glb"></a-asset-item>
-      <a-asset-item id="tile-pillar" src="tile-pillar.glb"></a-asset-item>
+      <a-asset-item id="water-pillar" src="water-pillar.glb"></a-asset-item>
+      <a-asset-item id="dry-pillar" src="dry-pillar.glb"></a-asset-item>
       <a-asset-item id="tile-wall" src="tile-wall.glb"></a-asset-item>
+      <a-asset-item id="water-wall" src="water-wall.glb"></a-asset-item>
       
       <a-asset-item id="desk" src="desk.glb"></a-asset-item>
       <a-asset-item id="rod" src="fishing-rod.glb"></a-asset-item>
