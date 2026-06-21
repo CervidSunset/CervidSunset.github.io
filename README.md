@@ -7,46 +7,92 @@
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
     
     <script>
-      // 1. PROCEDURAL TILE GENERATOR (WFC Framework)
-      AFRAME.registerComponent('wfc-generator', {
+      // 1. INFINITE TILE GENERATOR (Dynamic Chunking)
+      AFRAME.registerComponent('infinite-poolrooms', {
+        schema: {
+          tileSize: {default: 4},
+          renderDist: {default: 4} // Renders 4 tiles out in every direction
+        },
         init: function () {
-          const gridSize = 12; // Generates a 24x24 grid
-          const tileSize = 4;  // 4x4 meter tiles
+          this.worldData = new Map(); // Stores the layout infinitely in memory
+          this.activeDOM = new Map(); // Stores the currently visible <a-entity>s
+          this.player = document.querySelector('#rig');
+          
+          this.lastPlayerTileX = null;
+          this.lastPlayerTileZ = null;
+          
+          this.TILE_TYPES = ['water', 'dry', 'pillar', 'wall'];
 
-          // Tile Types (Map these to your .glb files later)
-          const TILE_TYPES = ['water', 'dry', 'pillar', 'wall'];
+          // Pre-define the spawn so the randomizer never overwrites it
+          this.worldData.set('0,0', 'spawn');
+        },
+        
+        // Tick runs every single frame (90hz on Quest)
+        tick: function () {
+          // Calculate which tile the player is currently standing on
+          const pos = this.player.getAttribute('position');
+          const currentTileX = Math.round(pos.x / this.data.tileSize);
+          const currentTileZ = Math.round(pos.z / this.data.tileSize);
 
-          for (let x = -gridSize; x <= gridSize; x++) {
-            for (let z = -gridSize; z <= gridSize; z++) {
-              // Skip the 0,0 coordinate to leave room for the Spawn Tile
-              if (x === 0 && z === 0) continue;
+          // Performance check: Only run the heavy math if the player crosses into a new tile
+          if (currentTileX === this.lastPlayerTileX && currentTileZ === this.lastPlayerTileZ) {
+            return; 
+          }
+          
+          this.lastPlayerTileX = currentTileX;
+          this.lastPlayerTileZ = currentTileZ;
 
-              const posX = x * tileSize;
-              const posZ = z * tileSize;
-              
-              // Basic adjacency logic (Simplified WFC)
-              // In a full implementation, this checks neighboring tiles before selecting.
-              let selectedTile = TILE_TYPES[Math.floor(Math.random() * TILE_TYPES.length)];
-              
-              let tileEl = document.createElement('a-entity');
-              tileEl.setAttribute('position', `${posX} 0 ${posZ}`);
+          this.updateWorld(currentTileX, currentTileZ);
+        },
 
-              // PLACEHOLDER GENERATION
-              // Replace these blocks with: tileEl.setAttribute('gltf-model', '#your-model-id');
-              if (selectedTile === 'water') {
-                tileEl.innerHTML = `<a-plane rotation="-90 0 0" width="4" height="4" color="#1CA3EC" material="opacity: 0.8"></a-plane>
-                                    <a-plane position="0 -0.5 0" rotation="-90 0 0" width="4" height="4" color="#F0F8FF"></a-plane>`;
-              } else if (selectedTile === 'dry') {
-                tileEl.innerHTML = `<a-plane rotation="-90 0 0" width="4" height="4" color="#F0F8FF" material="roughness: 0.2"></a-plane>`;
-              } else if (selectedTile === 'pillar') {
-                tileEl.innerHTML = `<a-plane rotation="-90 0 0" width="4" height="4" color="#1CA3EC" material="opacity: 0.8"></a-plane>
-                                    <a-box position="0 1.5 0" width="0.8" height="3" depth="0.8" color="#FFFFFF"></a-box>`;
-              } else if (selectedTile === 'wall') {
-                tileEl.innerHTML = `<a-plane rotation="-90 0 0" width="4" height="4" color="#F0F8FF"></a-plane>
-                                    <a-box position="0 2 -1.9" width="4" height="4" depth="0.2" color="#FFFFFF"></a-box>`;
+        updateWorld: function(pX, pZ) {
+          const dist = this.data.renderDist;
+          const size = this.data.tileSize;
+          let tilesToKeep = new Set();
+
+          // 1. GENERATE & RENDER NEARBY TILES
+          for (let x = pX - dist; x <= pX + dist; x++) {
+            for (let z = pZ - dist; z <= pZ + dist; z++) {
+              const key = `${x},${z}`;
+              tilesToKeep.add(key);
+
+              // If this coordinate has never been seen, pick a random tile type and save it
+              if (!this.worldData.has(key)) {
+                const selectedType = this.TILE_TYPES[Math.floor(Math.random() * this.TILE_TYPES.length)];
+                this.worldData.set(key, selectedType);
               }
 
-              this.el.appendChild(tileEl);
+              // If it's in memory, but not currently rendered in the 3D scene, spawn it
+              if (!this.activeDOM.has(key) && key !== '0,0') {
+                const tileType = this.worldData.get(key);
+                let tileEl = document.createElement('a-entity');
+                tileEl.setAttribute('position', `${x * size} 0 ${z * size}`);
+
+                // PLACEHOLDERS
+                if (tileType === 'water') {
+                  tileEl.innerHTML = `<a-plane rotation="-90 0 0" width="4" height="4" color="#1CA3EC" material="opacity: 0.8"></a-plane>
+                                      <a-plane position="0 -0.5 0" rotation="-90 0 0" width="4" height="4" color="#F0F8FF"></a-plane>`;
+                } else if (tileType === 'dry') {
+                  tileEl.innerHTML = `<a-plane rotation="-90 0 0" width="4" height="4" color="#F0F8FF" material="roughness: 0.2"></a-plane>`;
+                } else if (tileType === 'pillar') {
+                  tileEl.innerHTML = `<a-plane rotation="-90 0 0" width="4" height="4" color="#1CA3EC" material="opacity: 0.8"></a-plane>
+                                      <a-box position="0 1.5 0" width="0.8" height="3" depth="0.8" color="#FFFFFF"></a-box>`;
+                } else if (tileType === 'wall') {
+                  tileEl.innerHTML = `<a-plane rotation="-90 0 0" width="4" height="4" color="#F0F8FF"></a-plane>
+                                      <a-box position="0 2 -1.9" width="4" height="4" depth="0.2" color="#FFFFFF"></a-box>`;
+                }
+
+                this.el.appendChild(tileEl);
+                this.activeDOM.set(key, tileEl); // Track the actual 3D element
+              }
+            }
+          }
+
+          // 2. CULL DISTANT TILES (Delete DOM elements left behind)
+          for (let [key, entity] of this.activeDOM.entries()) {
+            if (!tilesToKeep.has(key)) {
+              this.el.removeChild(entity);
+              this.activeDOM.delete(key);
             }
           }
         }
@@ -145,7 +191,7 @@
 
     <a-scene background="color: #E0FFFF" fog="type: exponential; color: #E0FFFF; density: 0.04">
       
-      <a-entity wfc-generator></a-entity>
+      <a-entity infinite-poolrooms></a-entity>
 
       <a-light type="ambient" color="#FFF" intensity="0.7"></a-light>
       <a-light type="directional" position="-1 2 1" intensity="0.3"></a-light>
