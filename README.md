@@ -72,7 +72,7 @@
                 if (tileType === 'water') {
                   tileEl.innerHTML = `<a-plane rotation="-90 0 0" width="4" height="4" color="#1CA3EC" material="opacity: 0.8"></a-plane>
                                       <a-plane position="0 -0.5 0" rotation="-90 0 0" width="4" height="4" color="#F0F8FF"></a-plane>
-                                      <a-plane position="0 3.5 0" rotation="90 0 0" width="4" height="4" color="#F0F8FF" material="roughness: 0.2"></a-plane>`;
+                                      <a-plane position="0 4 0" rotation="90 0 0" width="4" height="4" color="#F0F8FF" material="roughness: 0.2"></a-plane>`;
                 } else if (tileType === 'dry') {
                   tileEl.innerHTML = `<a-plane rotation="-90 0 0" width="4" height="4" color="#F0F8FF" material="roughness: 0.2"></a-plane>`;
                 } else if (tileType === 'pillar') {
