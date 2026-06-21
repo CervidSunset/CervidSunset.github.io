@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebXR Poolrooms Fishing</title>
+    <title>WebXR Poolrooms Fishing - Iterative Build</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; }
         #ui-container { position: absolute; top: 10px; width: 100%; text-align: center; color: white; font-family: sans-serif; pointer-events: none; z-index: 100; }
@@ -20,7 +20,7 @@
 <body>
     <div id="ui-container">
         <h1>Poolrooms Fishing</h1>
-        <p id="status-text">Loading 3D Models... Please wait.</p>
+        <p id="status-text">Booting Engine...</p>
     </div>
 
     <script type="module">
@@ -64,22 +64,10 @@
             controller.add(new THREE.Mesh(gripGeo, gripMat));
         }
 
-        // --- Model Caching & Asset Arrays ---
+        // --- Core Variables ---
         const loader = new GLTFLoader();
-        
-        // This is the key change: tells the loader to look in the 'models' folder for all subsequent files
         loader.setPath('./models/'); 
-        
         const models = {}; 
-
-        const tileNames = ['water', 'dry', 'waterpillar', 'drypillar', 'waterwall', 'drywall'];
-        const fishVarieties = [
-            { name: "Liminal Koi", file: "liminal_koi" },
-            { name: "Tilefish", file: "tilefish" },
-            { name: "Backrooms Bass", file: "backrooms_bass" },
-            { name: "Glitch Guppy", file: "glitch_guppy" },
-            { name: "Chlorine Trout", file: "chlorine_trout" }
-        ];
 
         let rodModel = null;
         let poolModel = null;
@@ -89,50 +77,83 @@
             document.getElementById('status-text').innerText = text;
         }
 
-        // --- Asynchronous Loading ---
-        async function loadAssetsAndInit() {
+        // --- Safe Loading Helper ---
+        // Attempts to load a GLB. If it fails, it returns the provided fallback Mesh.
+        async function loadWithFallback(fileName, fallbackMesh) {
             try {
-                // 1. Load Static Environment
-                const deskGltf = await loader.loadAsync('desk.glb');
-                models.desk = deskGltf.scene;
-                models.desk.position.set(0, 0, -1); 
-                scene.add(models.desk);
-
-                const poolGltf = await loader.loadAsync('pool.glb');
-                poolModel = poolGltf.scene;
-                poolModel.position.set(1.5, 0, 0); 
-                scene.add(poolModel);
-
-                // 2. Load Fishing Rod
-                const rodGltf = await loader.loadAsync('fishing_rod.glb');
-                rodModel = rodGltf.scene;
-                rodModel.position.set(0, 0.85, -1); 
-                scene.add(rodModel);
-
-                // 3. Load WFC Tiles
-                for (const tile of tileNames) {
-                    const gltf = await loader.loadAsync(`${tile}.glb`);
-                    models[tile] = gltf.scene;
-                }
-
-                // 4. Load Fish Models
-                for (const fish of fishVarieties) {
-                    const gltf = await loader.loadAsync(`${fish.file}.glb`);
-                    models[fish.name] = gltf.scene;
-                }
-
-                // Build Map and start logic
-                generateWFCMap();
-                updateStatus("Explore using joysticks. Pick up the rod to fish.");
-                console.log("All models loaded successfully from the /models/ directory.");
-                
+                const gltf = await loader.loadAsync(fileName);
+                console.log(`Loaded: ${fileName}`);
+                return gltf.scene;
             } catch (error) {
-                console.error("CRITICAL ERROR: Failed to load a 3D model.", error);
-                updateStatus("Error loading models. Check the browser console (F12) to see which file failed.");
+                console.warn(`Missing model: ${fileName}. Using block fallback.`);
+                return fallbackMesh;
             }
         }
 
-        // --- WFC Map Generation (GLTF Instancing) ---
+        // --- Fallback Geometries ---
+        // These are only seen if the corresponding .glb file is missing from /models/
+        const fbDesk = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.8, 0.6), new THREE.MeshStandardMaterial({color: 0x5c4033}));
+        const fbPool = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshStandardMaterial({color: 0x0077be, side: THREE.DoubleSide}));
+        fbPool.rotation.x = -Math.PI / 2;
+        const fbRod = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.02, 1.5), new THREE.MeshStandardMaterial({color: 0x8b0000}));
+        fbRod.geometry.translate(0, 0.75, 0); // Pivot at handle
+
+        const fbTiles = {
+            'water': new THREE.Mesh(new THREE.BoxGeometry(2, 0.1, 2), new THREE.MeshStandardMaterial({color: 0x0088ff})),
+            'dry': new THREE.Mesh(new THREE.BoxGeometry(2, 0.1, 2), new THREE.MeshStandardMaterial({color: 0xdddddd})),
+            'waterpillar': new THREE.Mesh(new THREE.BoxGeometry(2, 4, 2), new THREE.MeshStandardMaterial({color: 0x004488})),
+            'drypillar': new THREE.Mesh(new THREE.BoxGeometry(2, 4, 2), new THREE.MeshStandardMaterial({color: 0x888888})),
+            'waterwall': new THREE.Mesh(new THREE.BoxGeometry(2, 4, 2), new THREE.MeshStandardMaterial({color: 0x002244})),
+            'drywall': new THREE.Mesh(new THREE.BoxGeometry(2, 4, 2), new THREE.MeshStandardMaterial({color: 0x444444}))
+        };
+
+        const fbFish = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.3, 0.05), new THREE.MeshStandardMaterial({color: 0x00ff00}));
+
+        // Asset Arrays
+        const tileNames = Object.keys(fbTiles);
+        const fishVarieties = [
+            { name: "Liminal Koi", file: "liminal_koi.glb" },
+            { name: "Tilefish", file: "tilefish.glb" },
+            { name: "Backrooms Bass", file: "backrooms_bass.glb" },
+            { name: "Glitch Guppy", file: "glitch_guppy.glb" },
+            { name: "Chlorine Trout", file: "chlorine_trout.glb" }
+        ];
+
+        // --- Asynchronous Init ---
+        async function bootGame() {
+            updateStatus("Checking models...");
+
+            // 1. Static Environment
+            models.desk = await loadWithFallback('desk.glb', fbDesk);
+            models.desk.position.set(0, 0.4, -1); // Adjusted fallback Y so it sits on ground
+            scene.add(models.desk);
+
+            poolModel = await loadWithFallback('pool.glb', fbPool);
+            poolModel.position.set(1.5, 0.01, 0); 
+            scene.add(poolModel);
+
+            // 2. Fishing Rod
+            rodModel = await loadWithFallback('fishing_rod.glb', fbRod);
+            rodModel.position.set(0, 0.85, -1); 
+            rodModel.rotation.set(-Math.PI / 2, 0, 0); 
+            scene.add(rodModel);
+
+            // 3. WFC Tiles
+            for (const tile of tileNames) {
+                models[tile] = await loadWithFallback(`${tile}.glb`, fbTiles[tile]);
+            }
+
+            // 4. Fish Models
+            for (const fish of fishVarieties) {
+                // We use clone() on the fallback so all missing fish don't share the same exact object reference
+                models[fish.name] = await loadWithFallback(fish.file, fbFish.clone());
+            }
+
+            generateWFCMap();
+            updateStatus("Explore using joysticks. Pick up the rod to fish.");
+        }
+
+        // --- WFC Map Generation ---
         function generateWFCMap() {
             const gridSize = 10;
             const tileSize = 2; 
@@ -144,7 +165,14 @@
                     const randomTileKey = tileNames[Math.floor(Math.random() * tileNames.length)];
                     const tileToPlace = models[randomTileKey].clone();
                     
-                    tileToPlace.position.set(x * tileSize, 0, z * tileSize);
+                    // Note: If using fallbacks, walls/pillars center point is the middle of the geometry.
+                    // This math places the bottom of a 4-unit tall fallback at Y=0.
+                    let yPos = 0;
+                    if (tileToPlace.geometry && tileToPlace.geometry.parameters.height) {
+                        yPos = tileToPlace.geometry.parameters.height / 2;
+                    }
+
+                    tileToPlace.position.set(x * tileSize, yPos, z * tileSize);
                     scene.add(tileToPlace);
                 }
             }
@@ -165,7 +193,7 @@
                 if (controller.position.distanceTo(rodWorldPos) < 0.4) {
                     controller.add(rodModel);
                     rodModel.position.set(0, 0, -0.1); 
-                    rodModel.rotation.set(-Math.PI / 4, 0, 0); 
+                    rodModel.rotation.set(-Math.PI / 2, 0, 0); 
                     rodHeld = true;
                     updateStatus("Rod equipped! Cast it over the water to the right.");
                 }
@@ -173,16 +201,13 @@
                 const caughtFishData = fishVarieties[Math.floor(Math.random() * fishVarieties.length)];
                 updateStatus(`You caught a ${caughtFishData.name}!`);
                 
-                if (activeFish) {
-                    rodModel.remove(activeFish);
-                }
+                if (activeFish) rodModel.remove(activeFish);
 
                 activeFish = models[caughtFishData.name].clone();
                 activeFish.position.set(0, 1.5, 0); 
                 rodModel.add(activeFish);
 
                 fishingState = 'idle';
-                console.log("Water normalized.");
             }
         }
 
@@ -261,10 +286,9 @@
             }
         }
 
-        // --- Boot Application ---
-        loadAssetsAndInit();
+        // --- Run Engine ---
+        bootGame();
 
-        // --- Main Render Loop ---
         renderer.setAnimationLoop(() => {
             handleLocomotion();
             handleFishingLogic();
