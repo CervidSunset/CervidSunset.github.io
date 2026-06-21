@@ -11,8 +11,8 @@
       AFRAME.registerComponent('infinite-chunk-manager', {
         schema: {
           tileSize: {type: 'number', default: 4},
-          renderRadius: {type: 'int', default: 5}, // Tiles generated around player
-          cullRadius: {type: 'int', default: 7}    // Tiles deleted when this far away
+          renderRadius: {type: 'int', default: 10}, // Tiles generated around player
+          cullRadius: {type: 'int', default: 10}    // Tiles deleted when this far away
         },
 
         init: function () {
