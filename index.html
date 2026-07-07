@@ -1,213 +1,153 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>Liminal Poolrooms Fishing</title>
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>The Poolrooms - Dreamcore Exploration</title>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.5.0/dist/aframe-extras.min.js"></script>
+
+  <script>
+    // Procedural Generator for Map and Textures to ensure fast standalone loading
+    AFRAME.registerComponent('poolrooms-generator', {
+      init: function () {
+        const sceneEl = this.el;
+
+        // 1. Generate the Pool Tile Texture dynamically via HTML Canvas
+        const canvas = document.getElementById('tileCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Base tile color (classic clean liminal aqua/white)
+        ctx.fillStyle = '#f2fafa'; 
+        ctx.fillRect(0, 0, 256, 256);
+        
+        // Grout line styling
+        ctx.strokeStyle = '#b0dad7'; 
+        ctx.lineWidth = 3;
+        
+        // Draw 8x8 tile grid grid pattern
+        const tileSize = 32;
+        for (let i = 0; i <= 256; i += tileSize) {
+          ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 256); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(256, i); ctx.stroke();
+        }
+
+        // 2. Define the 20x20 Grid Layout (1 = Wall, 0 = Shallow Water Corridor)
+        const map = [
+          [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+          [1,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
+          [1,0,0,1,0,0,0,1,1,0,1,1,0,0,0,1,1,0,0,1],
+          [1,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,1,0,0,1],
+          [1,1,0,1,1,1,0,1,0,0,0,1,1,1,0,1,0,0,0,1],
+          [1,0,0,0,0,1,0,0,0,0,0,0,0,1,0,1,0,1,1,1],
+          [1,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
+          [1,0,1,1,0,1,1,1,1,0,1,1,0,1,1,1,1,0,0,1],
+          [1,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,1], // Center Spawning Room zone
+          [1,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,1],
+          [1,0,0,1,1,1,1,0,1,1,1,1,1,1,0,0,1,1,0,1],
+          [1,0,0,0,0,0,1,0,1,0,0,0,0,1,0,0,0,1,0,1],
+          [1,1,1,0,0,0,1,0,1,0,0,0,0,1,0,0,0,1,0,1],
+          [1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,1,0,0,0,1],
+          [1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,1,0,0,0,1],
+          [1,0,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,0,1],
+          [1,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ];
+
+        const scale = 2;       // Size of each block cell (2m x 2m)
+        const wallHeight = 3.8; // Ceiling scale height
+
+        // 3. Iteratively Build out the Architectural Environment Grid
+        for (let r = 0; r < map.length; r++) {
+          for (let c = 0; c < map[r].length; c++) {
+            // Calculate absolute spatial offset relative to coordinate center (0,0,0)
+            let x = c * scale - (map[r].length * scale) / 2 + scale / 2;
+            let z = r * scale - (map.length * scale) / 2 + scale / 2;
+
+            if (map[r][c] === 1) {
+              // Create structural tile pillar walls
+              let wall = document.createElement('a-box');
+              wall.setAttribute('position', `${x} ${wallHeight / 2} ${z}`);
+              wall.setAttribute('width', scale);
+              wall.setAttribute('height', wallHeight);
+              wall.setAttribute('depth', scale);
+              wall.setAttribute('src', '#tileCanvas');
+              // Mapping repeat patterns nicely on geometric faces
+              wall.setAttribute('material', `repeat: ${scale} ${Math.round(wallHeight)}; roughness: 0.25; metalness: 0.05;`);
+              sceneEl.appendChild(wall);
+            } else {
+              // Randomly scatter sterile ambient light elements into open ceiling corridors
+              if (r % 5 === 0 && c % 5 === 0) {
+                // Fluorescent panel mesh
+                let lightPanel = document.createElement('a-box');
+                lightPanel.setAttribute('position', `${x} ${wallHeight - 0.02} ${z}`);
+                lightPanel.setAttribute('width', 1.4);
+                lightPanel.setAttribute('height', 0.05);
+                lightPanel.setAttribute('depth', 0.6);
+                lightPanel.setAttribute('material', 'shader: flat; color: #ffffff; lighting: false;');
+                sceneEl.appendChild(lightPanel);
+
+                // Safe low-intensity point lights to protect Framerates on Quest
+                let pointLight = document.createElement('a-entity');
+                pointLight.setAttribute('position', `${x} ${wallHeight - 0.5} ${z}`);
+                pointLight.setAttribute('light', 'type: point; intensity: 0.35; distance: 9; decay: 1.2; color: #eefcfa; castShadow: false;');
+                sceneEl.appendChild(pointLight);
+              }
+            }
+          }
+        }
+      }
+    });
+  </script>
+</head>
+<body>
+
+  <div style="position: absolute; top: -9999px;">
+    <canvas id="tileCanvas" width="256" height="256"></canvas>
+  </div>
+
+  <a-scene poolrooms-generator fog="type: exponential; color: #d0ebe9; density: 0.035;" renderer="antialias: true; colorManagement: true;">
     
-    <script>
-      // 1. INFINITE TILE GENERATOR (Dynamic Chunking)
-      AFRAME.registerComponent('infinite-poolrooms', {
-        schema: {
-          tileSize: {default: 4},
-          renderDist: {default: 10} // Renders tiles out in every direction
-        },
-        init: function () {
-          this.worldData = new Map(); // Stores the layout infinitely in memory
-          this.activeDOM = new Map(); // Stores the currently visible <a-entity>s
-          this.player = document.querySelector('#rig');
-          
-          this.lastPlayerTileX = null;
-          this.lastPlayerTileZ = null;
-          
-          // Updated to your specific requested tile names
-          this.TILE_TYPES = ['water', 'dry', 'waterpillar', 'drypillar', 'waterwall', 'drywall'];
+    <a-assets>
+      <canvas id="tileAsset" src="#tileCanvas"></canvas>
+    </a-assets>
 
-          // Pre-define the spawn so the randomizer never overwrites it
-          this.worldData.set('0,0', 'spawn');
-        },
-        
-        // Tick runs every single frame (90hz on Quest)
-        tick: function () {
-          const pos = this.player.getAttribute('position');
-          const currentTileX = Math.round(pos.x / this.data.tileSize);
-          const currentTileZ = Math.round(pos.z / this.data.tileSize);
-
-          // Performance check: Only run the heavy math if the player crosses into a new tile
-          if (currentTileX === this.lastPlayerTileX && currentTileZ === this.lastPlayerTileZ) {
-            return; 
-          }
-          
-          this.lastPlayerTileX = currentTileX;
-          this.lastPlayerTileZ = currentTileZ;
-
-          this.updateWorld(currentTileX, currentTileZ);
-        },
-
-        updateWorld: function(pX, pZ) {
-          const dist = this.data.renderDist;
-          const size = this.data.tileSize;
-          let tilesToKeep = new Set();
-
-          // 1. GENERATE & RENDER NEARBY TILES
-          for (let x = pX - dist; x <= pX + dist; x++) {
-            for (let z = pZ - dist; z <= pZ + dist; z++) {
-              const key = `${x},${z}`;
-              tilesToKeep.add(key);
-
-              // If this coordinate has never been seen, pick a random tile type and save it
-              if (!this.worldData.has(key)) {
-                const selectedType = this.TILE_TYPES[Math.floor(Math.random() * this.TILE_TYPES.length)];
-                this.worldData.set(key, selectedType);
-              }
-
-              // If it's in memory, but not currently rendered in the 3D scene, spawn it
-              if (!this.activeDOM.has(key) && key !== '0,0') {
-                const tileType = this.worldData.get(key);
-                let tileEl = document.createElement('a-entity');
-                
-                tileEl.setAttribute('position', `${x * size} 0 ${z * size}`);
-                
-                // Directly assign the 3D model based on the tile type. 
-                // If a model is missing, A-Frame will just log a warning and keep running.
-                tileEl.setAttribute('gltf-model', `url(models/${tileType}.glb)`);
-
-                this.el.appendChild(tileEl);
-                this.activeDOM.set(key, tileEl); // Track the actual 3D element
-              }
-            }
-          }
-
-          // 2. CULL DISTANT TILES (Delete DOM elements left behind)
-          for (let [key, entity] of this.activeDOM.entries()) {
-            if (!tilesToKeep.has(key)) {
-              this.el.removeChild(entity);
-              this.activeDOM.delete(key);
-            }
-          }
-        }
-      });
-
-      // 2. CORE FISHING MECHANIC
-      AFRAME.registerComponent('fishing-system', {
-        init: function () {
-          this.state = 'idle'; // idle, waiting, hooked
-          this.rodEquipped = false;
-          this.fishVarieties = [
-            "Ethereal Koi", "Tile-Glider", "Liminal Bass", 
-            "Chlorine Guppy", "Backrooms Snapper"
-          ];
-          this.uiText = document.querySelector('#fishing-ui');
-          this.el.addEventListener('triggerdown', this.onTrigger.bind(this));
-        },
-        
-        onTrigger: function (evt) {
-          if (!this.rodEquipped) {
-            const intersections = this.el.components.raycaster.intersectedEls;
-            if (intersections.length > 0 && intersections[0].id === 'fishing-rod') {
-              this.equipRod(intersections[0]);
-            }
-            return;
-          }
-
-          if (this.state === 'idle') {
-            this.castLine();
-          } else if (this.state === 'hooked') {
-            this.catchFish();
-          }
-        },
-
-        equipRod: function(rodEl) {
-          this.rodEquipped = true;
-          this.uiText.setAttribute('value', 'Rod equipped. Press Trigger near water to cast.');
-          
-          // Attach rod to controller
-          rodEl.removeAttribute('position');
-          rodEl.removeAttribute('rotation');
-          this.el.appendChild(rodEl);
-          rodEl.setAttribute('position', '0 -0.1 -0.4');
-          rodEl.setAttribute('rotation', '45 0 0');
-        },
-
-        castLine: function() {
-          this.state = 'waiting';
-          this.uiText.setAttribute('value', 'Waiting for a bite...');
-          
-          // Random bite time (3 to 8 seconds)
-          const biteTime = Math.floor(Math.random() * 5000) + 3000;
-          
-          setTimeout(() => {
-            if (this.state === 'waiting') {
-              this.state = 'hooked';
-              // NO TIMEOUT HERE: The fish remains hooked indefinitely until player triggers.
-              this.uiText.setAttribute('value', 'HOOKED! Press trigger to reel in.');
-              this.uiText.setAttribute('color', '#FF4500'); 
-            }
-          }, biteTime);
-        },
-
-        catchFish: function() {
-          const caughtFish = this.fishVarieties[Math.floor(Math.random() * this.fishVarieties.length)];
-          this.state = 'idle';
-          this.uiText.setAttribute('value', `Caught: ${caughtFish}!\nPress trigger to cast again.`);
-          this.uiText.setAttribute('color', '#00FF00');
-
-          this.spawnFishPlaceholder(caughtFish);
-        },
-
-        spawnFishPlaceholder: function(name) {
-          let fish = document.createElement('a-cylinder');
-          fish.setAttribute('radius', '0.05');
-          fish.setAttribute('height', '0.2');
-          fish.setAttribute('color', '#FFD700');
-          fish.setAttribute('rotation', '0 0 90');
-          // Spawn above desk
-          fish.setAttribute('position', '0 1 -1');
-          
-          setTimeout(() => {
-            if(fish.parentNode) fish.parentNode.removeChild(fish);
-            this.uiText.setAttribute('color', '#333');
-            this.uiText.setAttribute('value', 'Ready to cast.');
-          }, 4000);
-          
-          document.querySelector('a-scene').appendChild(fish);
-        }
-      });
-    </script>
-  </head>
-  <body>
-    <a-scene background="color: #E0FFFF" fog="type: exponential; color: #E0FFFF; density: 0.04">
-      
-      <a-entity infinite-poolrooms></a-entity>
-
-      <a-light type="ambient" color="#FFF" intensity="0.7"></a-light>
-      <a-light type="directional" position="-1 2 1" intensity="0.3"></a-light>
-
-      <a-entity id="rig" movement-controls="speed: 0.15" position="0 0 0">
-        <a-camera position="0 1.6 0">
-          <a-text id="fishing-ui" value="Grab the rod with your trigger." position="0 -0.3 -1" align="center" width="1.2" color="#333"></a-text>
-        </a-camera>
-        
-        <a-entity laser-controls="hand: left" raycaster="objects: .interactable; far: 4"></a-entity>
-        <a-entity laser-controls="hand: right" raycaster="objects: .interactable; far: 4" fishing-system></a-entity>
+    <a-entity id="rig" movement-controls="controls: gamepad, keyboard; speed: 0.12; fly: false;">
+      <a-entity camera 
+                position="0 1.6 0" 
+                look-controls="pointerLockEnabled: true">
       </a-entity>
+      <a-entity oculus-touch-controls="hand: left"></a-entity>
+      <a-entity oculus-touch-controls="hand: right"></a-entity>
+    </a-entity>
 
-      <a-entity id="spawn-tile" position="0 0 0">
-        <a-entity gltf-model="url(models/dry.glb)"></a-entity>
-        
-        <a-box position="0 0.4 -1" width="1.2" height="0.8" depth="0.6" color="#8B4513"></a-box>
-        <a-plane position="0 -0.25 2" rotation="0 0 90" width="0.5" height="4" color="#F0F8FF"></a-plane>
-        <a-plane position="0 -0.25 -2" rotation="0 180 90" width="0.5" height="4" color="#F0F8FF"></a-plane>
-        <a-plane position="2 -0.25 0" rotation="0 90 90" width="0.5" height="4" color="#F0F8FF"></a-plane>
-        <a-plane position="-2 -0.25 0" rotation="0 -90 90" width="0.5" height="4" color="#F0F8FF"></a-plane>
+    <a-light type="ambient" color="#e2f5f3" intensity="0.65"></a-light>
 
-        <a-plane position="1.2 -0.1 0" rotation="-90 0 0" width="1.5" height="2" color="#1CA3EC" material="opacity: 0.8"></a-plane>
-        <a-box position="1.2 -0.6 0" width="1.5" height="1" depth="2" color="#E0FFFF" material="side: back"></a-box>
+    <a-plane position="0 0 0" 
+             rotation="-90 0 0" 
+             width="45" 
+             height="45" 
+             src="#tileCanvas" 
+             material="repeat: 22.5 22.5; roughness: 0.3; metalness: 0.0;">
+    </a-plane>
 
-        <a-cylinder id="fishing-rod" class="interactable" position="0.6 0.8 -0.5" radius="0.015" height="1.2" rotation="45 0 0" color="#555"></a-cylinder>
-      </a-entity>
+    <a-plane position="0 3.8 0" 
+             rotation="90 0 0" 
+             width="45" 
+             height="45" 
+             src="#tileCanvas" 
+             material="repeat: 22.5 22.5; roughness: 0.5; metalness: 0.0;">
+    </a-plane>
 
-    </a-scene>
-  </body>
+    <a-plane position="0 0.35 0" 
+             rotation="-90 0 0" 
+             width="45" 
+             height="45" 
+             material="color: #4ed7d2; transparent: true; opacity: 0.42; roughness: 0.05; metalness: 0.1;"
+             animation="property: material.opacity; from: 0.38; to: 0.46; dir: alternate; dur: 3500; loop: true; easing: easeInOutQuad">
+    </a-plane>
+
+  </a-scene>
+</body>
 </html>
