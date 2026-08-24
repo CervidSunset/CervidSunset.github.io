@@ -1,152 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>The Poolrooms - Dreamcore Exploration</title>
+  <meta charset="utf-8">
+  <title>Cozy Fishing XR</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- A-Frame Library -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.5.0/dist/aframe-extras.min.js"></script>
 
   <script>
-    // Procedural Generator for Map and Textures to ensure fast standalone loading
-    AFRAME.registerComponent('poolrooms-generator', {
+    // Component to ensure WebXR AR / Passthrough initializes cleanly
+    AFRAME.registerComponent('xr-passthrough-setup', {
       init: function () {
         const sceneEl = this.el;
-
-        // 1. Generate the Pool Tile Texture dynamically via HTML Canvas
-        const canvas = document.getElementById('tileCanvas');
-        const ctx = canvas.getContext('2d');
-        
-        // Base tile color (classic clean liminal aqua/white)
-        ctx.fillStyle = '#f2fafa'; 
-        ctx.fillRect(0, 0, 256, 256);
-        
-        // Grout line styling
-        ctx.strokeStyle = '#b0dad7'; 
-        ctx.lineWidth = 3;
-        
-        // Draw 8x8 tile grid grid pattern
-        const tileSize = 32;
-        for (let i = 0; i <= 256; i += tileSize) {
-          ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 256); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(256, i); ctx.stroke();
-        }
-
-        // 2. Define the 20x20 Grid Layout (1 = Wall, 0 = Shallow Water Corridor)
-        const map = [
-          [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-          [1,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
-          [1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
-          [1,0,0,1,0,0,0,1,1,0,1,1,0,0,0,1,1,0,0,1],
-          [1,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,1,0,0,1],
-          [1,1,0,1,1,1,0,1,0,0,0,1,1,1,0,1,0,0,0,1],
-          [1,0,0,0,0,1,0,0,0,0,0,0,0,1,0,1,0,1,1,1],
-          [1,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
-          [1,0,1,1,0,1,1,1,1,0,1,1,0,1,1,1,1,0,0,1],
-          [1,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,1], // Center Spawning Room zone
-          [1,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,1],
-          [1,0,0,1,1,1,1,0,1,1,1,1,1,1,0,0,1,1,0,1],
-          [1,0,0,0,0,0,1,0,1,0,0,0,0,1,0,0,0,1,0,1],
-          [1,1,1,0,0,0,1,0,1,0,0,0,0,1,0,0,0,1,0,1],
-          [1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,1,0,0,0,1],
-          [1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,1,0,0,0,1],
-          [1,0,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,0,1],
-          [1,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,1],
-          [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-          [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
-        ];
-
-        const scale = 2;       // Size of each block cell (2m x 2m)
-        const wallHeight = 3.8; // Ceiling scale height
-
-        // 3. Iteratively Build out the Architectural Environment Grid
-        for (let r = 0; r < map.length; r++) {
-          for (let c = 0; c < map[r].length; c++) {
-            // Calculate absolute spatial offset relative to coordinate center (0,0,0)
-            let x = c * scale - (map[r].length * scale) / 2 + scale / 2;
-            let z = r * scale - (map.length * scale) / 2 + scale / 2;
-
-            if (map[r][c] === 1) {
-              // Create structural tile pillar walls
-              let wall = document.createElement('a-box');
-              wall.setAttribute('position', `${x} ${wallHeight / 2} ${z}`);
-              wall.setAttribute('width', scale);
-              wall.setAttribute('height', wallHeight);
-              wall.setAttribute('depth', scale);
-              wall.setAttribute('src', '#tileCanvas');
-              // Mapping repeat patterns nicely on geometric faces
-              wall.setAttribute('material', `repeat: ${scale} ${Math.round(wallHeight)}; roughness: 0.25; metalness: 0.05;`);
-              sceneEl.appendChild(wall);
-            } else {
-              // Randomly scatter sterile ambient light elements into open ceiling corridors
-              if (r % 5 === 0 && c % 5 === 0) {
-                // Fluorescent panel mesh
-                let lightPanel = document.createElement('a-box');
-                lightPanel.setAttribute('position', `${x} ${wallHeight - 0.02} ${z}`);
-                lightPanel.setAttribute('width', 1.4);
-                lightPanel.setAttribute('height', 0.05);
-                lightPanel.setAttribute('depth', 0.6);
-                lightPanel.setAttribute('material', 'shader: flat; color: #ffffff; lighting: false;');
-                sceneEl.appendChild(lightPanel);
-
-                // Safe low-intensity point lights to protect Framerates on Quest
-                let pointLight = document.createElement('a-entity');
-                pointLight.setAttribute('position', `${x} ${wallHeight - 0.5} ${z}`);
-                pointLight.setAttribute('light', 'type: point; intensity: 0.35; distance: 9; decay: 1.2; color: #eefcfa; castShadow: false;');
-                sceneEl.appendChild(pointLight);
-              }
-            }
+        sceneEl.addEventListener('enter-vr', () => {
+          if (sceneEl.is('ar-mode')) {
+            // Ensure clear background for mixed reality passthrough
+            sceneEl.renderer.setClearColor('#000000', 0);
           }
-        }
+        });
+      }
+    });
+
+    // Simple interaction listener for pinch / hand tracking gestures
+    AFRAME.registerComponent('pinch-listener', {
+      schema: { hand: { type: 'string', default: 'right' } },
+      init: function () {
+        this.el.addEventListener('pinchstarted', (evt) => {
+          console.log(`${this.data.hand} hand pinched at:`, evt.detail.position);
+          // Insert cast / reel / interaction logic here
+        });
       }
     });
   </script>
 </head>
-<body>
+<body style="margin: 0; overflow: hidden;">
+  <a-scene
+    xr-passthrough-setup
+    webxr="optionalFeatures: hit-test, local-floor, hand-tracking; overlayElement: #overlay;"
+    renderer="alpha: true; antialias: true; colorManagement: true;"
+    embedded>
 
-  <div style="position: absolute; top: -9999px;">
-    <canvas id="tileCanvas" width="256" height="256"></canvas>
-  </div>
-
-  <a-scene poolrooms-generator fog="type: exponential; color: #d0ebe9; density: 0.035;" renderer="antialias: true; colorManagement: true;">
-    
     <a-assets>
-      <canvas id="tileAsset" src="#tileCanvas"></canvas>
+      <!-- Fishing hole GLB asset -->
+      <a-asset-item id="fishingHoleModel" src="models/fishing_hole.glb"></a-asset-item>
     </a-assets>
 
-    <a-entity id="rig" movement-controls="controls: gamepad, keyboard; speed: 0.12; fly: false;">
-      <a-entity camera 
-                position="0 1.6 0" 
-                look-controls="pointerLockEnabled: true">
+    <!-- Lighting suitable for mixed reality overlays -->
+    <a-entity light="type: ambient; intensity: 0.8;"></a-entity>
+    <a-entity light="type: directional; intensity: 0.6; position: 1 4 2"></a-entity>
+
+    <!-- Option 1: Stationary Camera Rig (Locomotion/WASD stripped) -->
+    <a-entity id="rig" position="0 0 0">
+      <a-camera 
+        id="camera" 
+        look-controls="pointerLockEnabled: false" 
+        wasd-controls="enabled: false"
+        position="0 1.6 0">
+      </a-camera>
+
+      <!-- Meta Quest 3 Hand Tracking -->
+      <a-entity 
+        id="leftHand" 
+        hand-tracking-controls="hand: left; modelStyle: mesh;"
+        pinch-listener="hand: left">
       </a-entity>
-      <a-entity oculus-touch-controls="hand: left"></a-entity>
-      <a-entity oculus-touch-controls="hand: right"></a-entity>
+      <a-entity 
+        id="rightHand" 
+        hand-tracking-controls="hand: right; modelStyle: mesh;"
+        pinch-listener="hand: right">
+      </a-entity>
     </a-entity>
 
-    <a-light type="ambient" color="#e2f5f3" intensity="0.65"></a-light>
-
-    <a-plane position="0 0 0" 
-             rotation="-90 0 0" 
-             width="45" 
-             height="45" 
-             src="#tileCanvas" 
-             material="repeat: 22.5 22.5; roughness: 0.3; metalness: 0.0;">
-    </a-plane>
-
-    <a-plane position="0 3.8 0" 
-             rotation="90 0 0" 
-             width="45" 
-             height="45" 
-             src="#tileCanvas" 
-             material="repeat: 22.5 22.5; roughness: 0.5; metalness: 0.0;">
-    </a-plane>
-
-    <a-plane position="0 0.35 0" 
-             rotation="-90 0 0" 
-             width="45" 
-             height="45" 
-             material="color: #4ed7d2; transparent: true; opacity: 0.42; roughness: 0.05; metalness: 0.1;"
-             animation="property: material.opacity; from: 0.38; to: 0.46; dir: alternate; dur: 3500; loop: true; easing: easeInOutQuad">
-    </a-plane>
+    <!-- Stationary Target: Placed on the floor directly in front of the locked origin -->
+    <a-entity 
+      id="fishingHole" 
+      gltf-model="#fishingHoleModel" 
+      position="0 0 -1.2" 
+      rotation="0 0 0" 
+      scale="1 1 1">
+    </a-entity>
 
   </a-scene>
 </body>
