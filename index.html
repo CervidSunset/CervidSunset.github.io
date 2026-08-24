@@ -1,100 +1,122 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>WebXR Stationary Fishing</title>
-    <meta name="description" content="Stationary Mixed Reality Fishing Prototype for Meta Quest 3">
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <script>
-      // Simple passive fishing state manager
-      AFRAME.registerComponent('fishing-spot', {
-        init: function () {
-          this.isFishHooked = false;
-          this.el.addEventListener('click', () => {
-            if (!this.isFishHooked) {
-              console.log('Line cast! Waiting for bite...');
-              // Simulate passive bite after 4 seconds
-              setTimeout(() => {
-                this.isFishHooked = true;
-                this.el.setAttribute('material', 'color', '#4ade80');
-                console.log('Fish hooked! Reeling in...');
-              }, 4000);
-            } else {
-              console.log('Fish caught!');
-              this.isFishHooked = false;
-              this.el.setAttribute('material', 'color', '#0284c7');
-            }
-          });
-        }
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stationary WebXR Fishing Game</title>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
+    #ui-container {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 1000;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(8px);
+      padding: 16px;
+      border-radius: 10px;
+      color: #f8fafc;
+      font-size: 13px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .slider-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    input[type="range"] {
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Calibration HUD for Floor Placement -->
+  <div id="ui-container">
+    <strong>Fishing Hole Calibration</strong>
+    <div class="slider-row">
+      <label for="posX">X Offset:</label>
+      <input type="range" id="posX" min="-3" max="3" step="0.05" value="0">
+    </div>
+    <div class="slider-row">
+      <label for="heightY">Floor Height (Y):</label>
+      <input type="range" id="heightY" min="-2" max="1" step="0.05" value="-0.2">
+    </div>
+    <div class="slider-row">
+      <label for="posZ">Distance (Z):</label>
+      <input type="range" id="posZ" min="-4" max="-0.5" step="0.05" value="-1.5">
+    </div>
+  </div>
+
+  <a-scene 
+    webxr="optionalFeatures: hit-test, local-floor, hand-tracking; requiredFeatures: local-floor"
+    renderer="antialias: true; colorManagement: true; alpha: true"
+    embedded>
+
+    <a-assets>
+      <!-- Model asset -->
+      <a-asset-item id="fishingHoleModel" src="models/fishing_hole.glb"></a-asset-item>
+    </a-assets>
+
+    <!-- METHOD 1: Stationary Camera Rig (No movement-controls / wasd-controls) -->
+    <a-entity id="rig" position="0 0 0">
+      <a-camera 
+        id="camera" 
+        look-controls="pointerLockEnabled: false" 
+        wasd-controls="enabled: false"
+        position="0 1.6 0">
+      </a-camera>
+
+      <!-- Controller Tracking -->
+      <a-entity id="leftHandController" oculus-touch-controls="hand: left"></a-entity>
+      <a-entity id="rightHandController" oculus-touch-controls="hand: right"></a-entity>
+
+      <!-- Hand Tracking Anchors -->
+      <a-entity id="leftHand" hand-tracking-controls="hand: left"></a-entity>
+      <a-entity id="rightHand" hand-tracking-controls="hand: right"></a-entity>
+    </a-entity>
+
+    <!-- Interactive Fishing Hole Anchor -->
+    <a-entity id="fishingHole" position="0 -0.2 -1.5">
+      <a-entity 
+        gltf-model="#fishingHoleModel" 
+        scale="1 1 1">
+      </a-entity>
+    </a-entity>
+
+    <!-- Soft ambient fill -->
+    <a-light type="ambient" intensity="0.9"></a-light>
+    <a-light type="directional" position="1 4 2" intensity="0.6"></a-light>
+  </a-scene>
+
+  <script>
+    // Manual Calibration Slider Bindings
+    const fishingHole = document.querySelector('#fishingHole');
+    const posX = document.querySelector('#posX');
+    const heightY = document.querySelector('#heightY');
+    const posZ = document.querySelector('#posZ');
+
+    function updateHoleTransform() {
+      if (!fishingHole) return;
+      fishingHole.setAttribute('position', {
+        x: parseFloat(posX.value),
+        y: parseFloat(heightY.value),
+        z: parseFloat(posZ.value)
       });
-    </script>
-  </head>
-  <body>
-    <!-- Configured for Meta Quest 3 passthrough and stationary local-floor tracking -->
-    <a-scene 
-      webxr="optionalFeatures: hit-test, local-floor; referenceSpaceType: local-floor"
-      renderer="alpha: true; antialias: true;">
-      
-      <a-assets>
-        <!-- Place your fishing hole GLB asset here -->
-        <a-asset-item id="fishingHoleModel" src="models/fishing_hole.glb"></a-asset-item>
-      </a-assets>
+    }
 
-      <!-- Fixed Stationary Camera Rig -->
-      <a-entity id="rig" position="0 0 0">
-        <!-- Head camera: thumbstick/WASD locomotion disabled, natural 6DoF head movement intact -->
-        <a-camera 
-          id="head" 
-          look-controls="pointerLockEnabled: false" 
-          wasd-controls="enabled: false">
-          <a-cursor 
-            position="0 0 -1" 
-            geometry="primitive: ring; radiusInner: 0.01; radiusOuter: 0.018"
-            material="color: #ffffff; shader: flat"
-            raycaster="objects: .clickable">
-          </a-cursor>
-        </a-camera>
-
-        <!-- Left Hand Tracking (Stationary / Gesture / Raycast) -->
-        <a-entity 
-          id="leftHand" 
-          hand-tracking-controls="hand: left"
-          laser-controls="hand: left"
-          raycaster="objects: .clickable; far: 5">
-        </a-entity>
-
-        <!-- Right Hand Tracking (Stationary / Gesture / Raycast) -->
-        <a-entity 
-          id="rightHand" 
-          hand-tracking-controls="hand: right"
-          laser-controls="hand: right"
-          raycaster="objects: .clickable; far: 5">
-        </a-entity>
-      </a-entity>
-
-      <!-- Stationary Fishing Anchor (Positioned on the floor directly in front of the player) -->
-      <a-entity id="fishing-station" position="0 0 -1.5">
-        <!-- 3D Fishing Hole Model -->
-        <a-entity 
-          id="fishingHole" 
-          gltf-model="#fishingHoleModel" 
-          position="0 0.01 0">
-        </a-entity>
-
-        <!-- Fallback / Interactive Fishing Water Surface -->
-        <a-circle 
-          id="waterSurface"
-          class="clickable"
-          fishing-spot
-          rotation="-90 0 0" 
-          radius="0.6" 
-          material="color: #0284c7; opacity: 0.85; transparent: true; roughness: 0.2">
-        </a-circle>
-      </a-entity>
-
-      <!-- Lighting -->
-      <a-light type="ambient" intensity="0.8" color="#ffffff"></a-light>
-      <a-light type="directional" intensity="0.5" position="1 4 2"></a-light>
-    </a-scene>
-  </body>
+    posX.addEventListener('input', updateHoleTransform);
+    heightY.addEventListener('input', updateHoleTransform);
+    posZ.addEventListener('input', updateHoleTransform);
+  </script>
+</body>
 </html>
