@@ -6,6 +6,37 @@
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     
     <script>
+      function onXRFrame(time, frame) {
+  const session = frame.session;
+  session.requestAnimationFrame(onXRFrame);
+
+  for (const inputSource of session.inputSources) {
+    // Check if input source is a hand (not a physical controller)
+    if (!inputSource.hand) continue;
+
+    const hand = inputSource.hand; // XRHand map containing 25 joints
+    const indexTip = hand.get('index-finger-tip');
+    const thumbTip = hand.get('thumb-tip');
+
+    const indexPose = frame.getJointPose(indexTip, xrReferenceSpace);
+    const thumbPose = frame.getJointPose(thumbTip, xrReferenceSpace);
+
+    if (indexPose && thumbPose) {
+      const idxPos = indexPose.transform.position;
+      const thmPos = thumbPose.transform.position;
+
+      // Euclidean distance
+      const dx = idxPos.x - thmPos.x;
+      const dy = idxPos.y - thmPos.y;
+      const dz = idxPos.z - thmPos.z;
+      const distance = Math.hypot(dx, dy, dz);
+
+      if (distance < 0.02) {
+        // Execute pinch logic
+      }
+    }
+  }
+}
       AFRAME.registerComponent('game-manager', {
         init: function () {
           this.state = 'placing'; // States: placing, adjusting, idle, casted, bite, caught
