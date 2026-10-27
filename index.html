@@ -6,26 +6,6 @@
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     
     <script>
-      AFRAME.registerComponent('hand-input-bridge', {
-  init: function () {
-    const el = this.el;
-
-    // Map pinch start -> triggerdown
-    el.addEventListener('pinchstarted', (evt) => {
-      el.emit('triggerdown', { position: evt.detail.position }, false);
-    });
-
-    // Map pinch end -> triggerup
-    el.addEventListener('pinchended', (evt) => {
-      el.emit('triggerup', {}, false);
-    });
-
-    // Map pinch move (optional, for dragging/sliders)
-    el.addEventListener('pinchmoved', (evt) => {
-      el.emit('axismove', { position: evt.detail.position }, false);
-    });
-  }
-});
       AFRAME.registerComponent('game-manager', {
         init: function () {
           this.state = 'placing'; // States: placing, adjusting, idle, casted, bite, caught
@@ -182,6 +162,40 @@
           this.fishText.setAttribute('value', 'Pull trigger to cast into the hole.');
         }
       });
+      AFRAME.registerComponent('hand-interaction-handler', {
+  init: function () {
+    const el = this.el;
+
+    // Triggered when thumb and index finger touch
+    el.addEventListener('pinchstarted', (evt) => {
+      const pinchPosition = evt.detail.position;
+      console.log('Pinch started at:', pinchPosition);
+      
+      // Example: Raycast or overlap check at pinchPosition to pick up objects
+      this.grabTarget(pinchPosition);
+    });
+
+    // Triggered when fingers move apart
+    el.addEventListener('pinchend', (evt) => {
+      console.log('Pinch released');
+      this.releaseTarget();
+    });
+
+    // Triggered every frame the pinch is maintained
+    el.addEventListener('pinchmoved', (evt) => {
+      const currentPos = evt.detail.position;
+      // Update grabbed object position
+    });
+  },
+
+  grabTarget: function (position) {
+    // Proximity check against interactable objects
+  },
+
+  releaseTarget: function () {
+    // Clear active grab
+  }
+});
     </script>
   </head>
   <body>
@@ -218,8 +232,24 @@
         </a-box>
       </a-entity>
 
-      <a-entity id="leftHand" hand-tracking-controls="hand: left; modelStyle: mesh;"></a-entity>
-      <a-entity id="rightHand" hand-tracking-controls="hand: right; modelStyle: mesh;" hand-input-bridge></a-entity>
+      <a-entity id="rig">
+  <!-- Head / Camera -->
+  <a-camera position="0 1.6 0"></a-camera>
+
+  <!-- Existing VR Controller Entities -->
+  <a-entity id="leftController" oculus-touch-controls="hand: left" laser-controls="hand: left"></a-entity>
+  <a-entity id="rightController" oculus-touch-controls="hand: right" laser-controls="hand: right"></a-entity>
+
+  <!-- New Hand Tracking Entities -->
+  <a-entity id="leftHand" 
+            hand-tracking-controls="hand: left; modelStyle: mesh; modelColor: #4A90E2">
+  </a-entity>
+
+  <a-entity id="rightHand" 
+            hand-tracking-controls="hand: right; modelStyle: mesh; modelColor: #4A90E2"
+            hand-interaction-handler>
+  </a-entity>
+</a-entity>
 
       <a-plane id="floor-plane" class="interact-floor" position="0 0 0" rotation="-90 0 0" width="30" height="30" material="opacity: 0; transparent: true"></a-plane>
 
