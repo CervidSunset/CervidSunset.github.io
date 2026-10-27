@@ -6,37 +6,20 @@
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     
     <script>
-      function onXRFrame(time, frame) {
-  const session = frame.session;
-  session.requestAnimationFrame(onXRFrame);
+      AFRAME.registerComponent('pinch-listener', {
+        init: function () {
+          this.el.addEventListener('pinchstarted', (evt) => {
+            console.log('Pinch started on:', evt.detail.hand);
+            // evt.detail contains: { hand, position }
+            document.querySelector('#status-text').setAttribute('value', `${evt.detail.hand} pinching`);
+          });
 
-  for (const inputSource of session.inputSources) {
-    // Check if input source is a hand (not a physical controller)
-    if (!inputSource.hand) continue;
-
-    const hand = inputSource.hand; // XRHand map containing 25 joints
-    const indexTip = hand.get('index-finger-tip');
-    const thumbTip = hand.get('thumb-tip');
-
-    const indexPose = frame.getJointPose(indexTip, xrReferenceSpace);
-    const thumbPose = frame.getJointPose(thumbTip, xrReferenceSpace);
-
-    if (indexPose && thumbPose) {
-      const idxPos = indexPose.transform.position;
-      const thmPos = thumbPose.transform.position;
-
-      // Euclidean distance
-      const dx = idxPos.x - thmPos.x;
-      const dy = idxPos.y - thmPos.y;
-      const dz = idxPos.z - thmPos.z;
-      const distance = Math.hypot(dx, dy, dz);
-
-      if (distance < 0.02) {
-        // Execute pinch logic
-      }
-    }
-  }
-}
+          this.el.addEventListener('pinchended', (evt) => {
+            console.log('Pinch ended on:', evt.detail.hand);
+            document.querySelector('#status-text').setAttribute('value', 'Not pinching');
+          });
+        }
+      });
       AFRAME.registerComponent('game-manager', {
         init: function () {
           this.state = 'placing'; // States: placing, adjusting, idle, casted, bite, caught
@@ -206,6 +189,19 @@
       <a-assets>
         <a-asset-item id="fishing-hole-glb" src="./models/fishing_hole.glb"></a-asset-item>
       </a-assets>
+
+      <!-- Hand entities with visual models and pinch detection -->
+      <a-entity 
+        id="leftHand" 
+        hand-tracking-controls="hand: left; modelStyle: mesh;"
+        pinch-listener>
+      </a-entity>
+      
+      <a-entity 
+        id="rightHand" 
+        hand-tracking-controls="hand: right; modelStyle: mesh;"
+        pinch-listener>
+      </a-entity>
 
       <a-entity id="start-menu" position="0 1.4 -1.2">
         <a-plane color="#111111" opacity="0.9" width="1.6" height="0.6" position="0 0 -0.01"></a-plane>
