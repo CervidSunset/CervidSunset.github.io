@@ -2,219 +2,214 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Desk Fishing Hole</title>
+    <title>MR Fishing Multitasker</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    
     <script>
-      AFRAME.registerComponent('game-manager', {
+      // 1. SPATIAL GRAB INTERACTOR (Works for both Controllers and Hands)
+      AFRAME.registerComponent('grab-interact', {
         init: function () {
-          this.state = 'placing'; // States: placing, adjusting, idle, casted, bite, caught
-          
-          this.bobber = document.querySelector('#bobber');
-          this.fishText = document.querySelector('#ui-text');
-          this.hole = document.querySelector('#fishing-hole');
-          this.reticle = document.querySelector('#reticle');
-          this.startMenu = document.querySelector('#start-menu');
-          this.heightMenu = document.querySelector('#height-menu');
-          
-          this.targetPos = {x: 0, y: 0, z: -1.5}; 
+          this.grabbedEl = null;
+          this.worldPos = new THREE.Vector3();
+          this.worldQuat = new THREE.Quaternion();
 
-          // 1. Hover listener: Move the green ring as the user moves their controller laser
-          document.querySelector('#floor-plane').addEventListener('mousemove', (evt) => {
-            if (this.state === 'placing') {
-              let hitPoint = evt.detail.intersection.point;
-              this.targetPos.x = hitPoint.x;
-              this.targetPos.z = hitPoint.z;
-              
-              this.reticle.setAttribute('position', `${this.targetPos.x} 0.01 ${this.targetPos.z}`);
-              this.reticle.setAttribute('visible', 'true');
+          const grab = () => {
+            if (this.grabbedEl) return;
+            // Find closest grabbable object
+            const grabbables = document.querySelectorAll('.grabbable');
+            let closest = null;
+            let closestDist = 0.2; // 20cm grab radius
+
+            this.el.object3D.getWorldPosition(this.worldPos);
+
+            grabbables.forEach(el => {
+              const elPos = new THREE.Vector3();
+              el.object3D.getWorldPosition(elPos);
+              const dist = this.worldPos.distanceTo(elPos);
+              if (dist < closestDist) {
+                closestDist = dist;
+                closest = el;
+              }
+            });
+
+            if (closest) {
+              this.grabbedEl = closest;
+              // If it's a button, click it instead of holding it
+              if (this.grabbedEl.classList.contains('button')) {
+                this.grabbedEl.emit('click');
+                this.grabbedEl = null;
+              }
             }
-          });
+          };
 
-          // 2. Click listener: Lock the base X/Z coordinates when they click the floor
-          document.querySelector('#floor-plane').addEventListener('click', () => {
-            if (this.state === 'placing') {
-              this.lockBasePosition();
-            }
-          });
+          const release = () => {
+            this.grabbedEl = null;
+          };
 
-          // 3. Height Menu listeners: Wire up the virtual adjustment buttons
-          document.querySelector('#btn-raise').addEventListener('click', () => this.adjustHeight(0.02));
-          document.querySelector('#btn-lower').addEventListener('click', () => this.adjustHeight(-0.02));
-          document.querySelector('#btn-confirm').addEventListener('click', () => this.confirmPlacement());
-
-          // 4. Global Action trigger: Handles actual fishing gameplay mechanics
-          const rightHand = document.querySelector('#rightHand');
-          rightHand.addEventListener('triggerdown', (evt) => {
-            // Only capture raw trigger pulls if we are actively fishing
-            if (this.state !== 'placing' && this.state !== 'adjusting') {
-              this.handleFishingGameplay();
-            }
-          });
+          // Listeners for controllers and hand tracking pinch
+          this.el.addEventListener('triggerdown', grab);
+          this.el.addEventListener('pinchstarted', grab);
+          this.el.addEventListener('triggerup', release);
+          this.el.addEventListener('pinchended', release);
         },
-
-        lockBasePosition: function() {
-          this.state = 'adjusting';
-          
-          // Spawn pond at baseline height (0) and make it visible
-          this.hole.setAttribute('position', this.targetPos);
-          this.hole.setAttribute('visible', 'true');
-          
-          // Hide start instructions, show the height calibration panel
-          this.startMenu.setAttribute('visible', 'false');
-          this.heightMenu.setAttribute('visible', 'true');
-          
-          // Turn off the floor plane so it doesn't block our menu clicks
-          document.querySelector('#floor-plane').setAttribute('class', '');
-        },
-
-        adjustHeight: function(amount) {
-          if (this.state === 'adjusting') {
-            this.targetPos.y += amount;
+        tick: function () {
+          // Keep grabbed object snapped to hand position/rotation
+          if (this.grabbedEl) {
+            this.el.object3D.getWorldPosition(this.worldPos);
+            this.el.object3D.getWorldQuaternion(this.worldQuat);
             
-            // Move both the pond and the alignment ring up/down in real-time
-            this.hole.setAttribute('position', this.targetPos);
-            this.reticle.setAttribute('position', this.targetPos);
+            this.grabbedEl.object3D.position.copy(this.worldPos);
+            // Optional: apply rotation. We'll leave it out for the pond so it stays flat, 
+            // but apply it if it's the rod.
+            if (this.grabbedEl.id === 'fishing-rod') {
+              this.grabbedEl.object3D.quaternion.copy(this.worldQuat);
+              // Rotate 90 degrees so it points out from the hand like a real rod
+              this.grabbedEl.object3D.rotateX(-Math.PI / 2);
+            }
           }
-        },
+        }
+      });
 
-        confirmPlacement: function() {
-          this.state = 'idle';
+      // 2. POND HEIGHT UI CONTROLS
+      AFRAME.registerComponent('pond-ui', {
+        init: function () {
+          const pond = document.querySelector('#pond-container');
+          const upBtn = this.el.querySelector('.up-btn');
+          const downBtn = this.el.querySelector('.down-btn');
+          const lockBtn = this.el.querySelector('.lock-btn');
+
+          upBtn.addEventListener('click', () => { pond.object3D.position.y += 0.05; });
+          downBtn.addEventListener('click', () => { pond.object3D.position.y -= 0.05; });
           
-          // Hide setup UIs entirely
-          this.heightMenu.setAttribute('visible', 'false');
-          this.reticle.setAttribute('visible', 'false');
-          
-          // Place fishing UI text floating comfortably above the customized pond height
-          this.fishText.setAttribute('position', {
-             x: this.targetPos.x,
-             y: this.targetPos.y + 0.8,
-             z: this.targetPos.z
+          lockBtn.addEventListener('click', () => {
+            const isLocked = !pond.classList.contains('grabbable');
+            if (isLocked) {
+              pond.classList.add('grabbable');
+              lockBtn.setAttribute('color', '#ff4444'); // Red = unlocked/moveable
+            } else {
+              pond.classList.remove('grabbable');
+              lockBtn.setAttribute('color', '#44ff44'); // Green = locked
+            }
           });
-          this.fishText.setAttribute('value', 'Position Locked!\nPull right trigger to cast line.');
-          this.fishText.setAttribute('visible', 'true');
-        },
+        }
+      });
 
-        handleFishingGameplay: function () {
-          if (this.state === 'idle') this.castLine();
-          else if (this.state === 'casted') this.reelEarly();
-          else if (this.state === 'bite') this.catchFish();
-          else if (this.state === 'caught') this.resetToIdle();
+      // 3. BAREBONES FISHING MECHANIC
+      AFRAME.registerComponent('fishing-mechanic', {
+        init: function() {
+          this.bobber = document.querySelector('#bobber');
+          this.pond = document.querySelector('#pond-container');
+          this.state = 'idle'; // idle, fishing, bite
+          this.biteTimer = 0;
+          this.rodTipPos = new THREE.Vector3();
+          this.pondPos = new THREE.Vector3();
         },
-
-        castLine: function () {
-          this.state = 'casted';
-          this.fishText.setAttribute('value', 'Line casted... waiting for a bite.');
+        tick: function(time, timeDelta) {
+          const rodEl = this.el;
           
-          this.bobber.setAttribute('position', {
-             x: this.targetPos.x,
-             y: this.targetPos.y + 0.05,
-             z: this.targetPos.z
-          });
-          this.bobber.setAttribute('visible', 'true');
+          // Calculate rod tip position (top of the cylinder)
+          rodEl.object3D.getWorldPosition(this.rodTipPos);
+          const tipOffset = new THREE.Vector3(0, 0.5, 0); // half length of rod
+          tipOffset.applyQuaternion(rodEl.object3D.quaternion);
+          this.rodTipPos.add(tipOffset);
 
-          let biteDelay = Math.random() * 4000 + 4000;
-          this.biteTimeout = setTimeout(() => {
-            this.triggerBite();
-          }, biteDelay);
-        },
+          this.pond.object3D.getWorldPosition(this.pondPos);
 
-        triggerBite: function () {
-          this.state = 'bite';
-          this.fishText.setAttribute('value', '!! BITE !! REEL IT IN NOW!');
+          // Simulate line/bobber dropping straight down from tip
+          const dropDepth = Math.max(this.pondPos.y, this.rodTipPos.y - 1.5); // string length
           
-          let dipY = this.targetPos.y - 0.1;
-          this.bobber.setAttribute('animation', `property: position; to: ${this.targetPos.x} ${dipY} ${this.targetPos.z}; dur: 200; loops: 5; dir: alternate`);
+          // Draw the string (using A-Frame's line component dynamically)
+          rodEl.sceneEl.setAttribute('line', `start: ${this.rodTipPos.x} ${this.rodTipPos.y} ${this.rodTipPos.z}; end: ${this.rodTipPos.x} ${dropDepth} ${this.rodTipPos.z}; color: white`);
           
-          this.escapeTimeout = setTimeout(() => {
-            this.fishEscape();
-          }, 2000);
-        },
+          // Update bobber visual position
+          this.bobber.object3D.position.set(this.rodTipPos.x, dropDepth, this.rodTipPos.z);
 
-        catchFish: function () {
-          clearTimeout(this.escapeTimeout);
-          this.bobber.removeAttribute('animation');
-          this.state = 'caught';
-          
-          const fishTypes = ['Bass', 'Trout', 'Salmon', 'Golden Carp', 'Old Boot'];
-          const randomFish = fishTypes[Math.floor(Math.random() * fishTypes.length)];
-          
-          this.fishText.setAttribute('value', `Caught: ${randomFish}!\nPull trigger to recast.`);
-          this.bobber.setAttribute('visible', 'false');
-        },
+          // Check if bobber is in the pond water
+          const distToPondCenter = Math.sqrt(
+            Math.pow(this.rodTipPos.x - this.pondPos.x, 2) + 
+            Math.pow(this.rodTipPos.z - this.pondPos.z, 2)
+          );
 
-        reelEarly: function () {
-          clearTimeout(this.biteTimeout);
-          this.state = 'idle';
-          this.fishText.setAttribute('value', 'Reeled in too early. Try again.');
-          this.bobber.setAttribute('visible', 'false');
-        },
+          const inWater = (distToPondCenter < 0.6 && dropDepth <= this.pondPos.y + 0.1);
 
-        fishEscape: function () {
-          this.bobber.removeAttribute('animation');
-          this.state = 'idle';
-          this.fishText.setAttribute('value', 'The fish got away! Try again.');
-          this.bobber.setAttribute('visible', 'false');
-        },
+          if (inWater && this.state === 'idle') {
+            this.state = 'fishing';
+            this.biteTimer = time + 3000 + Math.random() * 5000; // 3 to 8 seconds wait
+            this.bobber.setAttribute('color', '#ffffff');
+          } else if (!inWater) {
+            this.state = 'idle';
+            this.bobber.setAttribute('color', '#ff0000'); // red when out of water
+          }
 
-        resetToIdle: function () {
-          this.state = 'idle';
-          this.fishText.setAttribute('value', 'Pull trigger to cast into the hole.');
+          // Trigger a bite
+          if (this.state === 'fishing' && time > this.biteTimer) {
+            this.state = 'bite';
+            this.bobber.setAttribute('color', '#00ff00'); // turns green on bite
+            this.biteTimer = time + 2000; // 2 seconds to pull up
+          }
+
+          // Missed the fish
+          if (this.state === 'bite' && time > this.biteTimer) {
+            this.state = 'idle';
+            this.biteTimer = time + 2000; // cooldown
+          }
         }
       });
     </script>
   </head>
   <body>
-
-    <a-scene 
-      webxr="optionalFeatures: hand-tracking"
-      webxr="optionalFeatures: local-floor; referenceSpaceType: local-floor"
-      xr-mode-ui="XRMode: xr"
-      background="transparent: true"
-      game-manager>
+    <!-- webxr="mode: ar" forces Passthrough background -->
+    <a-scene webxr="optionalFeatures: hand-tracking; mode: ar">
       
       <a-assets>
-        <a-asset-item id="fishing-hole-glb" src="./models/fishing_hole.glb"></a-asset-item>
+        <!-- Place your actual GLB here. The code falls back to the cylinder behind it if missing -->
+        <a-asset-item id="pond-model" src="fishing_hole.glb"></a-asset-item>
       </a-assets>
 
-      <a-entity id="start-menu" position="0 1.4 -1.2">
-        <a-plane color="#111111" opacity="0.9" width="1.6" height="0.6" position="0 0 -0.01"></a-plane>
-        <a-text value="Welcome to Desk Fishing!\n\nAim your laser at the ground or desk\nand click to set the location." 
-                align="center" color="#FFFFFF" width="1.4"></a-text>
+      <!-- DUAL INPUT HANDLERS -->
+      <a-entity id="left-hand" 
+                oculus-touch-controls="hand: left" 
+                hand-tracking-controls="hand: left" 
+                grab-interact>
+      </a-entity>
+      <a-entity id="right-hand" 
+                oculus-touch-controls="hand: right" 
+                hand-tracking-controls="hand: right" 
+                grab-interact>
       </a-entity>
 
-      <a-entity id="height-menu" position="0 1.4 -1.2" visible="false">
-        <a-plane color="#111111" opacity="0.9" width="1.6" height="0.7" position="0 0 -0.01"></a-plane>
-        <a-text value="Calibrate Pond Height\nUse your laser pointer to click the buttons." align="center" color="#FFFFFF" width="1.4" position="0 0.22 0"></a-text>
+      <!-- FISHING POND (Grabbable to place it initially) -->
+      <!-- Starts slightly in front of user and down. -->
+      <a-entity id="pond-container" class="grabbable" position="0 0.1 -1">
+        <!-- Visual Pond (Fallback shape) -->
+        <a-cylinder radius="0.7" height="0.1" color="#1a66ff" opacity="0.8"></a-cylinder>
+        <a-ring radius-inner="0.7" radius-outer="0.8" color="#654321" rotation="-90 0 0"></a-ring>
+        <!-- Try to load 3D model if it exists -->
+        <a-entity gltf-model="#pond-model" scale="1 1 1" position="0 0 0"></a-entity>
         
-        <a-box id="btn-raise" class="clickable" color="#4CAF50" position="-0.4 -0.1 0" width="0.3" height="0.15" depth="0.02">
-          <a-text value="HIGHER" align="center" position="0 0 0.015" scale="0.4 0.4 0.4" color="#FFF"></a-text>
-        </a-box>
-        <a-box id="btn-lower" class="clickable" color="#F44336" position="0 -0.1 0" width="0.3" height="0.15" depth="0.02">
-          <a-text value="LOWER" align="center" position="0 0 0.015" scale="0.4 0.4 0.4" color="#FFF"></a-text>
-        </a-box>
-        <a-box id="btn-confirm" class="clickable" color="#008CBA" position="0.4 -0.1 0" width="0.3" height="0.15" depth="0.02">
-          <a-text value="CONFIRM" align="center" position="0 0 0.015" scale="0.4 0.4 0.4" color="#FFF"></a-text>
-        </a-box>
+        <!-- POND UI: Floating control panel attached to the pond -->
+        <a-entity id="pond-ui-panel" pond-ui position="0 0.5 0" rotation="0 0 0">
+          <a-box class="grabbable button up-btn" position="-0.2 0 0" scale="0.1 0.1 0.05" color="#aaaaaa">
+            <a-text value="UP" align="center" position="0 0 0.6" scale="2 2 2"></a-text>
+          </a-box>
+          <a-box class="grabbable button lock-btn" position="0 0 0" scale="0.1 0.1 0.05" color="#ff4444">
+            <a-text value="LOCK" align="center" position="0 0 0.6" scale="2 2 2"></a-text>
+          </a-box>
+          <a-box class="grabbable button down-btn" position="0.2 0 0" scale="0.1 0.1 0.05" color="#aaaaaa">
+            <a-text value="DOWN" align="center" position="0 0 0.6" scale="2 2 2"></a-text>
+          </a-box>
+        </a-entity>
       </a-entity>
 
-      <a-entity id="leftHand" hand-tracking-controls="hand: left" oculus-touch-controls="hand: left" laser-controls="hand: left" raycaster="objects: .clickable, .interact-floor; far: 5"></a-entity>
-      <a-entity id="rightHand" hand-tracking-controls="hand: right" oculus-touch-controls="hand: right" laser-controls="hand: right" raycaster="objects: .clickable, .interact-floor; far: 5"></a-entity>
+      <!-- FISHING ROD (Grabbable, stays where dropped) -->
+      <a-entity id="fishing-rod" class="grabbable" position="0.5 1 -0.5" rotation="0 0 0" fishing-mechanic>
+        <!-- The rod itself -->
+        <a-cylinder radius="0.02" height="1.0" color="#8B4513" position="0 0 0"></a-cylinder>
+        <!-- Handle -->
+        <a-cylinder radius="0.025" height="0.3" color="#111111" position="0 -0.35 0"></a-cylinder>
+      </a-entity>
 
-      <a-plane id="floor-plane" class="interact-floor" position="0 0 0" rotation="-90 0 0" width="30" height="30" material="opacity: 0; transparent: true"></a-plane>
-
-      <a-ring id="reticle" rotation="-90 0 0" radius-inner="0.12" radius-outer="0.15" color="#00FF00" visible="false"></a-ring>
-      
-      <a-entity id="fishing-hole" gltf-model="#fishing-hole-glb" position="0 0 0" scale="0.1 0.1 0.1" visible="false"></a-entity>
-      
-      <a-sphere id="bobber" radius="0.03" color="#FF0000" visible="false"></a-sphere>
-      
-      <a-text id="ui-text" value="" scale="0.5 0.5 0.5" color="#FFFFFF" align="center" visible="false">
-        <a-plane color="#000000" opacity="0.6" width="2.2" height="0.35" position="0 0 -0.01"></a-plane>
-      </a-text>
-
-      <a-entity light="type: ambient; intensity: 0.6;"></a-entity>
-      <a-entity light="type: directional; intensity: 0.5;" position="2 4 1"></a-entity>
+      <!-- BOBBER (Visual only, logic is handled in the rod's script) -->
+      <a-sphere id="bobber" radius="0.04" color="#ff0000"></a-sphere>
 
     </a-scene>
   </body>
