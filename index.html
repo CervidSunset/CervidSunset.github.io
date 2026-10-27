@@ -6,20 +6,26 @@
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     
     <script>
-      AFRAME.registerComponent('pinch-listener', {
-        init: function () {
-          this.el.addEventListener('pinchstarted', (evt) => {
-            console.log('Pinch started on:', evt.detail.hand);
-            // evt.detail contains: { hand, position }
-            document.querySelector('#status-text').setAttribute('value', `${evt.detail.hand} pinching`);
-          });
+      AFRAME.registerComponent('hand-input-bridge', {
+  init: function () {
+    const el = this.el;
 
-          this.el.addEventListener('pinchended', (evt) => {
-            console.log('Pinch ended on:', evt.detail.hand);
-            document.querySelector('#status-text').setAttribute('value', 'Not pinching');
-          });
-        }
-      });
+    // Map pinch start -> triggerdown
+    el.addEventListener('pinchstarted', (evt) => {
+      el.emit('triggerdown', { position: evt.detail.position }, false);
+    });
+
+    // Map pinch end -> triggerup
+    el.addEventListener('pinchended', (evt) => {
+      el.emit('triggerup', {}, false);
+    });
+
+    // Map pinch move (optional, for dragging/sliders)
+    el.addEventListener('pinchmoved', (evt) => {
+      el.emit('axismove', { position: evt.detail.position }, false);
+    });
+  }
+});
       AFRAME.registerComponent('game-manager', {
         init: function () {
           this.state = 'placing'; // States: placing, adjusting, idle, casted, bite, caught
@@ -181,6 +187,7 @@
   <body>
 
     <a-scene 
+      webxr="optionalFeatures: hand-tracking;"
       webxr="optionalFeatures: local-floor; referenceSpaceType: local-floor"
       xr-mode-ui="XRMode: xr"
       background="transparent: true"
@@ -189,19 +196,6 @@
       <a-assets>
         <a-asset-item id="fishing-hole-glb" src="./models/fishing_hole.glb"></a-asset-item>
       </a-assets>
-
-      <!-- Hand entities with visual models and pinch detection -->
-      <a-entity 
-        id="leftHand" 
-        hand-tracking-controls="hand: left; modelStyle: mesh;"
-        pinch-listener>
-      </a-entity>
-      
-      <a-entity 
-        id="rightHand" 
-        hand-tracking-controls="hand: right; modelStyle: mesh;"
-        pinch-listener>
-      </a-entity>
 
       <a-entity id="start-menu" position="0 1.4 -1.2">
         <a-plane color="#111111" opacity="0.9" width="1.6" height="0.6" position="0 0 -0.01"></a-plane>
@@ -224,8 +218,8 @@
         </a-box>
       </a-entity>
 
-      <a-entity id="leftHand" laser-controls="hand: left" raycaster="objects: .clickable, .interact-floor; far: 5"></a-entity>
-      <a-entity id="rightHand" laser-controls="hand: right" raycaster="objects: .clickable, .interact-floor; far: 5"></a-entity>
+      <a-entity id="leftHand" hand-tracking-controls="hand: left; modelStyle: mesh;"></a-entity>
+      <a-entity id="rightHand" hand-tracking-controls="hand: right; modelStyle: mesh;" hand-input-bridge></a-entity>
 
       <a-plane id="floor-plane" class="interact-floor" position="0 0 0" rotation="-90 0 0" width="30" height="30" material="opacity: 0; transparent: true"></a-plane>
 
