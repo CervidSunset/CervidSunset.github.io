@@ -133,7 +133,7 @@
 
           if (inWater && this.state === 'idle') {
             this.state = 'fishing';
-            this.biteTimer = time + 3000 + Math.random() * 5000; // 3 to 8 seconds wait
+            this.biteTimer = time + 10000 + Math.random() * 20000; // 10 seconds to 20 seconds wait
             this.bobber.setAttribute('color', '#ffffff');
           } else if (!inWater) {
             this.state = 'idle';
@@ -144,13 +144,13 @@
           if (this.state === 'fishing' && time > this.biteTimer) {
             this.state = 'bite';
             this.bobber.setAttribute('color', '#00ff00'); // turns green on bite
-            this.biteTimer = time + 2000; // 2 seconds to pull up
+            this.biteTimer = time + 60000; // 60 seconds to pull up
           }
 
           // Missed the fish
           if (this.state === 'bite' && time > this.biteTimer) {
             this.state = 'idle';
-            this.biteTimer = time + 2000; // cooldown
+            this.biteTimer = time + 5000; // cooldown
           }
         }
       });
